@@ -7,6 +7,7 @@ import type { ItemId } from '@/domain/value-objects/item-id'
 
 export const itemsQueryKey = ['items'] as const
 export const dashboardQueryKey = ['dashboard'] as const
+export const goalsQueryKey = ['goals'] as const
 
 export function useItemsQuery(options: ListItemsOptions = {}) {
   const { listItems } = useUseCases()
@@ -21,6 +22,7 @@ function useInvalidateItemQueries() {
   return () => {
     void queryClient.invalidateQueries({ queryKey: itemsQueryKey })
     void queryClient.invalidateQueries({ queryKey: dashboardQueryKey })
+    void queryClient.invalidateQueries({ queryKey: goalsQueryKey })
   }
 }
 

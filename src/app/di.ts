@@ -1,4 +1,5 @@
 import { createGetDashboardDataUseCase } from '@/application/use-cases/dashboard/get-dashboard-data'
+import { createGetGoalsDataUseCase } from '@/application/use-cases/goals/get-goals-data'
 import { createCreateItemUseCase } from '@/application/use-cases/items/create-item'
 import { createDeleteItemUseCase } from '@/application/use-cases/items/delete-item'
 import { createListItemsUseCase } from '@/application/use-cases/items/list-items'
@@ -12,6 +13,7 @@ export interface AppUseCases {
   readonly deleteItem: ReturnType<typeof createDeleteItemUseCase>
   readonly listItems: ReturnType<typeof createListItemsUseCase>
   readonly getDashboardData: ReturnType<typeof createGetDashboardDataUseCase>
+  readonly getGoalsData: ReturnType<typeof createGetGoalsDataUseCase>
 }
 
 /**
@@ -28,5 +30,6 @@ export function createAppUseCases(
     deleteItem: createDeleteItemUseCase(repository),
     listItems: createListItemsUseCase(repository),
     getDashboardData: createGetDashboardDataUseCase(repository),
+    getGoalsData: createGetGoalsDataUseCase(repository),
   }
 }
