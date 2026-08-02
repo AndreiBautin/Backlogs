@@ -2,6 +2,8 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
+import { DEFAULT_SETTINGS } from '@/domain/entities/settings'
+import { InMemorySettingsRepository } from '@/infrastructure/storage/in-memory-settings-repository'
 import { renderWithProviders } from '@/test/render-with-providers'
 
 import { useItemUiStore } from '../store/use-item-ui-store'
@@ -43,5 +45,32 @@ describe('QuickCaptureModal', () => {
     useItemUiStore.getState().openQuickCapture()
 
     expect(await screen.findByRole('button', { name: 'Add item' })).toBeDisabled()
+  })
+
+  it('pre-fills the category from settings and applies the default status on create', async () => {
+    const user = userEvent.setup()
+    const settingsRepository = new InMemorySettingsRepository()
+    await settingsRepository.save({
+      ...DEFAULT_SETTINGS,
+      defaultCategory: 'books',
+      defaultStatus: 'wishlist',
+    })
+    const { repository } = renderWithProviders(<QuickCaptureModal />, {
+      settingsRepository,
+    })
+    useItemUiStore.getState().openQuickCapture()
+
+    expect(await screen.findByRole('combobox', { name: 'Category' })).toHaveTextContent(
+      'Books',
+    )
+
+    await user.type(screen.getByLabelText('Title'), 'Dune')
+    await user.click(screen.getByRole('button', { name: 'Add item' }))
+
+    await waitFor(async () => {
+      const items = await repository.getAll()
+      expect(items).toHaveLength(1)
+      expect(items[0]).toMatchObject({ category: 'books', status: 'wishlist' })
+    })
   })
 })

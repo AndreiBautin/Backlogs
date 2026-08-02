@@ -19,6 +19,7 @@ import { STATUS_LABELS, STATUSES, type Status } from '@/domain/status/status'
 import { ItemCard } from '@/features/items/components/ItemCard'
 import { useItemsQuery } from '@/features/items/hooks/use-items'
 import { useItemUiStore } from '@/features/items/store/use-item-ui-store'
+import { useSettingsQuery } from '@/features/settings/hooks/use-settings'
 
 /** Sentinel for "no filter selected" — shadcn's Select doesn't allow an empty-string item value. */
 const ALL = '__all__'
@@ -67,13 +68,28 @@ function FilterSelect({
 }
 
 export function DiscoveryPage() {
+  const { data: settings } = useSettingsQuery()
+
+  if (!settings) {
+    return <div className="text-muted-foreground p-8 text-sm">Loading…</div>
+  }
+
+  return <DiscoveryContent defaultSort={settings.defaultSort} />
+}
+
+interface DiscoveryContentProps {
+  defaultSort: SortKey
+}
+
+/** Mounted only once settings has loaded, so sortKey's initial value is never stale. */
+function DiscoveryContent({ defaultSort }: DiscoveryContentProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [category, setCategory] = useState(ALL)
   const [status, setStatus] = useState(ALL)
   const [priority, setPriority] = useState(ALL)
   const [platform, setPlatform] = useState(ALL)
   const [tag, setTag] = useState(ALL)
-  const [sortKey, setSortKey] = useState<SortKey>('recently-added')
+  const [sortKey, setSortKey] = useState<SortKey>(defaultSort)
 
   const selectItem = useItemUiStore((state) => state.selectItem)
 

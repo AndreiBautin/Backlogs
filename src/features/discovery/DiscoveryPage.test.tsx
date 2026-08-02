@@ -2,7 +2,9 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
+import { DEFAULT_SETTINGS } from '@/domain/entities/settings'
 import { InMemoryItemRepository } from '@/infrastructure/storage/in-memory-item-repository'
+import { InMemorySettingsRepository } from '@/infrastructure/storage/in-memory-settings-repository'
 import { buildItem } from '@/test/builders/item-builder'
 import { renderWithProviders } from '@/test/render-with-providers'
 
@@ -91,5 +93,16 @@ describe('DiscoveryPage', () => {
 
     expect(await screen.findByText('Dune')).toBeInTheDocument()
     expect(screen.getByText('Hollow Knight')).toBeInTheDocument()
+  })
+
+  it('initializes the sort control from the default sort setting', async () => {
+    const repository = await seedRepository()
+    const settingsRepository = new InMemorySettingsRepository()
+    await settingsRepository.save({ ...DEFAULT_SETTINGS, defaultSort: 'alphabetical' })
+    renderWithProviders(<DiscoveryPage />, { repository, settingsRepository })
+
+    expect(await screen.findByRole('combobox', { name: 'Sort' })).toHaveTextContent(
+      'Alphabetical',
+    )
   })
 })

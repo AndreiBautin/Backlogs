@@ -50,3 +50,18 @@ export function useUpdateItemMutation() {
     onSuccess: invalidate,
   })
 }
+
+export function useExportItemsMutation() {
+  const { exportItems } = useUseCases()
+  return useMutation({ mutationFn: () => exportItems() })
+}
+
+export function useImportItemsMutation() {
+  const { importItems } = useUseCases()
+  const invalidate = useInvalidateItemQueries()
+
+  return useMutation({
+    mutationFn: (raw: string) => importItems(raw),
+    onSuccess: invalidate,
+  })
+}

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { ItemDetailDrawer } from '@/features/items/components/ItemDetailDrawer'
 import { QuickCaptureModal } from '@/features/items/components/QuickCaptureModal'
 import { useItemUiStore } from '@/features/items/store/use-item-ui-store'
+import { useApplyTheme } from '@/features/settings/hooks/use-apply-theme'
 import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
@@ -16,6 +17,7 @@ const NAV_ITEMS = [
 
 export function AppShell() {
   const openQuickCapture = useItemUiStore((state) => state.openQuickCapture)
+  useApplyTheme()
 
   return (
     <div className="flex min-h-svh">
