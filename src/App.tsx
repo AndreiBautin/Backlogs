@@ -1,8 +1,13 @@
+import { RouterProvider } from 'react-router-dom'
+
+import { AppProviders } from '@/app/providers'
+import { router } from '@/app/router'
+
 function App() {
   return (
-    <div className="flex min-h-svh items-center justify-center">
-      <p className="text-muted-foreground text-sm">Backlogs — foundation scaffold</p>
-    </div>
+    <AppProviders>
+      <RouterProvider router={router} />
+    </AppProviders>
   )
 }
 
