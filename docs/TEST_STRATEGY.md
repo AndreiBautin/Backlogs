@@ -1,8 +1,8 @@
 # Test Strategy
 
 Tests are colocated with source (`x.ts` + `x.test.ts`, `X.tsx` + `X.test.tsx`)
-using Vitest, `jsdom`, and React Testing Library. As of Milestone 2: **109
-tests across 24 files, all layers, zero skipped.**
+using Vitest, `jsdom`, and React Testing Library. As of Milestone 3: **125
+tests across 27 files, all layers, zero skipped.**
 
 | Layer          | What's tested                     | How                                                                                                          | Mocks needed                       |
 | -------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
@@ -73,12 +73,11 @@ pnpm lint         # type-aware ESLint (strictTypeChecked + stylisticTypeChecked)
 pnpm build        # tsc -b && vite build
 ```
 
-## Milestone 3+ additions
+## Milestone 4+ additions
 
-Goals will need streak/backlog-age service tests; Settings and
-Import/Export will need their own repository/use-case tests following the
-exact same patterns established here (in-memory fakes, no mocks, contract
-tests for any new persistence adapter).
+Settings and Import/Export will need their own repository/use-case tests
+following the exact same patterns established here (in-memory fakes, no
+mocks, contract tests for any new persistence adapter).
 
 ### A flakiness note from Discovery
 
@@ -90,3 +89,19 @@ exceeded Vitest's 5s default. Fixed by shortening the typed string and
 giving that one test a 10s timeout, rather than loosening the global
 default for every test. Worth remembering if a future RTL test that types
 a long string starts flaking only in full-suite runs.
+
+### A real-clock gotcha from Goals
+
+`GoalsPage` (unlike `DashboardPage`) doesn't thread a fixed `now` through
+to `getGoalsData` — it just calls it with no args, so the use-case falls
+back to the real `new Date()`. That's fine for the app, but it makes any
+RTL test whose expected outcome depends on "this month" or "this year"
+implicitly coupled to wall-clock time at test-run time. One `GoalsPage`
+test originally hardcoded `dateCompleted: '2026-01-01T00:00:00.000Z'` to
+land in "this year" — correct today, silently wrong (and flaky-looking)
+in a future year. Fixed by computing the date relative to
+`new Date()` at test-run time instead of a hardcoded string. If Goals ever
+needs deterministic date-dependent RTL tests, the real fix is giving
+`GoalsPage`/`useGoalsDataQuery` an injectable clock the way the domain
+layer already has, rather than continuing to route around real time in
+tests.

@@ -65,16 +65,32 @@ doesn't exist.
 **Result:** 109 tests total, all four layers still green, `pnpm typecheck`
 / `pnpm lint` / `pnpm build` all clean.
 
-## Milestone 3 — Goals
+## Milestone 3 — Goals (done)
 
-## Milestone 3 — Goals
+1. **Domain** — `getGoalsStats(items, now)`: current completion streak
+   (consecutive months with ≥1 completion, counting back from the current
+   month — the current month must itself have a completion for the streak
+   to be non-zero), average completions per month (total completions ÷
+   months since the first one, rounded to 1 decimal), average backlog age
+   in days (rounded, over items that are neither completed nor dropped),
+   and the oldest such unfinished item. Reuses `getCompletionStats`
+   internally for completed-this-month/year rather than duplicating that
+   logic. 11 tests, no I/O.
+2. **Application** — `getGoalsData` wraps `getGoalsStats` over the
+   repository snapshot, wired into `AppUseCases`. Item create/update
+   mutations now invalidate a `goals` query key alongside `items` and
+   `dashboard`, so the Goals view stays in sync.
+3. **Presentation** — `GoalsPage` replacing its stub: streak, completed
+   this month/year, average completions/month, average backlog age, and
+   the oldest unfinished item (clickable — opens the Item Detail drawer).
+   A friendly empty state for a totally empty backlog; a local empty
+   state in the "oldest unfinished" section when the backlog exists but
+   is fully caught up. `StatTile` was extracted out of `QuickStats` into
+   `components/shared` so Dashboard and Goals share it instead of
+   duplicating it. RTL-tested and verified live in the browser.
 
-- Domain: streak calculation (consecutive months with ≥1 completion),
-  backlog age (`now - dateAdded`), oldest-unfinished-item lookup, average
-  completions per month.
-- Presentation: `GoalsPage` replacing its stub — current streak, completed
-  this month/year, average completions/month, average backlog age, oldest
-  unfinished item.
+**Result:** 125 tests total, all four layers still green, `pnpm typecheck`
+/ `pnpm lint` / `pnpm build` all clean.
 
 ## Milestone 4 — Settings + Import/Export
 

@@ -32,8 +32,13 @@ without mocks.
   ordering (priority), each with a runtime type guard.
 - **services/** — pure functions over `Item[]`:
   `getDashboardSections` (Continue / Start Next / Recently Finished /
-  Recently Added) and `getCompletionStats` (backlog size, completions,
-  completion %, items-by-category).
+  Recently Added), `getCompletionStats` (backlog size, completions,
+  completion %, items-by-category), `filterItems`/`sortItems` (Discovery's
+  search/filter/sort), and `getGoalsStats` (streak, completion averages,
+  backlog age, oldest unfinished item — reuses `getCompletionStats`
+  internally rather than duplicating its logic).
+- **sorting/** — `SortKey`, following the same closed-value-set pattern as
+  `Status`/`Priority`.
 - **repositories/** — `ItemRepository`, a port (interface only). Every
   method returns a `Promise`, even though the current adapter is
   synchronous under the hood — this is what lets a future network/SQLite
@@ -48,9 +53,12 @@ code, no concrete storage details. Each is a factory function —
 `InMemoryItemRepository` and never touch real storage or mocks.
 
 - **use-cases/items/** — `createItem`, `updateItem` (throws
-  `ItemNotFoundError` for an unknown id), `deleteItem`, `listItems`.
+  `ItemNotFoundError` for an unknown id), `deleteItem`, `listItems`
+  (accepts optional `{ filters, sortKey }`, composing `filterItems`/
+  `sortItems` over the repository's full snapshot).
 - **use-cases/dashboard/** — `getDashboardData`, which composes both domain
   stats services into one payload for the presentation layer.
+- **use-cases/goals/** — `getGoalsData`, wrapping `getGoalsStats`.
 - **errors/** — `ItemNotFoundError`.
 
 ## infrastructure/ — `src/infrastructure`
@@ -101,8 +109,11 @@ never the source of truth for persisted data; that always flows through
   `StatusBadge`, `PriorityBadge`, the item-UI Zustand store, and the
   TanStack Query hooks (`useItemsQuery`, `useCreateItemMutation`,
   `useUpdateItemMutation`).
-- **discovery/**, **goals/**, **settings/** — stub pages for now (see
-  `IMPLEMENTATION_PLAN.md`).
+- **discovery/** — `DiscoveryPage`: search, category/status/priority/
+  platform/tag filters, sort control.
+- **goals/** — `GoalsPage`, `useGoalsDataQuery`: streak, completion
+  averages, backlog age, oldest unfinished item.
+- **settings/** — still a stub page (see `IMPLEMENTATION_PLAN.md`).
 
 Components stay thin: hooks call use-cases, domain services do the
 decision-making, components render the result. No business logic lives in
