@@ -61,7 +61,7 @@ export const CATEGORY_REGISTRY = [
   {
     id: 'youtube',
     label: 'YouTube',
-    icon: 'Youtube',
+    icon: 'SquarePlay',
     suggestedPlatforms: ['YouTube'],
   },
   {

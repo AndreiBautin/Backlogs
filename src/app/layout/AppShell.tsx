@@ -2,6 +2,8 @@ import { LayoutDashboard, Search, Settings as SettingsIcon, Target } from 'lucid
 import { NavLink, Outlet } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
+import { ItemDetailDrawer } from '@/features/items/components/ItemDetailDrawer'
+import { QuickCaptureModal } from '@/features/items/components/QuickCaptureModal'
 import { useItemUiStore } from '@/features/items/store/use-item-ui-store'
 import { cn } from '@/lib/utils'
 
@@ -56,6 +58,9 @@ export function AppShell() {
       <main className="min-w-0 flex-1">
         <Outlet />
       </main>
+
+      <QuickCaptureModal />
+      <ItemDetailDrawer />
     </div>
   )
 }
