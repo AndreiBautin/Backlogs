@@ -1,15 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { useUseCases } from '@/app/use-cases-context'
+import type { ListItemsOptions } from '@/application/use-cases/items/list-items'
 import type { CreateItemInput, ItemChanges } from '@/domain/entities/item'
 import type { ItemId } from '@/domain/value-objects/item-id'
 
 export const itemsQueryKey = ['items'] as const
 export const dashboardQueryKey = ['dashboard'] as const
 
-export function useItemsQuery() {
+export function useItemsQuery(options: ListItemsOptions = {}) {
   const { listItems } = useUseCases()
-  return useQuery({ queryKey: itemsQueryKey, queryFn: listItems })
+  return useQuery({
+    queryKey: [...itemsQueryKey, options],
+    queryFn: () => listItems(options),
+  })
 }
 
 function useInvalidateItemQueries() {

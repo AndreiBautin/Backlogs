@@ -26,4 +26,48 @@ describe('listItems use-case', () => {
 
     await expect(listItems()).resolves.toEqual([])
   })
+
+  it('applies filters when given', async () => {
+    const repository = new InMemoryItemRepository()
+    const game = buildItem({ title: 'Game', category: 'games' })
+    const book = buildItem({ title: 'Book', category: 'books' })
+    await repository.save(game)
+    await repository.save(book)
+    const listItems = createListItemsUseCase(repository)
+
+    const items = await listItems({ filters: { category: 'games' } })
+
+    expect(items).toEqual([game])
+  })
+
+  it('applies a sort key when given', async () => {
+    const repository = new InMemoryItemRepository()
+    const banana = buildItem({ title: 'Banana' })
+    const apple = buildItem({ title: 'Apple' })
+    await repository.save(banana)
+    await repository.save(apple)
+    const listItems = createListItemsUseCase(repository)
+
+    const items = await listItems({ sortKey: 'alphabetical' })
+
+    expect(items.map((item) => item.title)).toEqual(['Apple', 'Banana'])
+  })
+
+  it('applies filters and sort together', async () => {
+    const repository = new InMemoryItemRepository()
+    const zGame = buildItem({ title: 'Zelda', category: 'games' })
+    const aGame = buildItem({ title: 'Adventure', category: 'games' })
+    const book = buildItem({ title: 'Book', category: 'books' })
+    await repository.save(zGame)
+    await repository.save(aGame)
+    await repository.save(book)
+    const listItems = createListItemsUseCase(repository)
+
+    const items = await listItems({
+      filters: { category: 'games' },
+      sortKey: 'alphabetical',
+    })
+
+    expect(items.map((item) => item.title)).toEqual(['Adventure', 'Zelda'])
+  })
 })
