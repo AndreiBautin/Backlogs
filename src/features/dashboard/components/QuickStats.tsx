@@ -1,16 +1,8 @@
+import { StatTile } from '@/components/shared/StatTile'
 import type { CompletionStats } from '@/domain/services/completion-stats'
 
 interface QuickStatsProps {
   stats: CompletionStats
-}
-
-function StatTile({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="border-border rounded-lg border px-4 py-3">
-      <p className="text-foreground text-2xl font-semibold tabular-nums">{value}</p>
-      <p className="text-muted-foreground text-xs">{label}</p>
-    </div>
-  )
 }
 
 export function QuickStats({ stats }: QuickStatsProps) {
