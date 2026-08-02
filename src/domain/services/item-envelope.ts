@@ -48,6 +48,14 @@ export function createItemEnvelope(items: readonly Item[]): ItemEnvelope {
 export interface ParsedItemEnvelope {
   readonly items: Item[]
   readonly warning: string | null
+  /**
+   * True once raw JSON parsed and had the { version, items[] } shape, even
+   * if individual items inside were dropped or the list is empty. False
+   * means raw wasn't recognizable as an envelope at all — callers should
+   * treat that as "nothing usable was found," not "the backlog is now
+   * empty," and must not use `items` to overwrite existing data.
+   */
+  readonly envelopeValid: boolean
 }
 
 /** Parses raw JSON into a validated item list, never throwing — corruption is reported via `warning`. */
@@ -56,16 +64,16 @@ export function parseItemEnvelope(raw: string): ParsedItemEnvelope {
   try {
     parsed = JSON.parse(raw)
   } catch {
-    return { items: [], warning: 'Invalid JSON' }
+    return { items: [], warning: 'Invalid JSON', envelopeValid: false }
   }
 
   if (!isEnvelopeShape(parsed)) {
-    return { items: [], warning: 'Unexpected data shape' }
+    return { items: [], warning: 'Unexpected data shape', envelopeValid: false }
   }
 
   const validItems = parsed.items.filter(isPlausibleItem)
   const warning =
     validItems.length !== parsed.items.length ? 'Dropped malformed item(s)' : null
 
-  return { items: validItems, warning }
+  return { items: validItems, warning, envelopeValid: true }
 }
