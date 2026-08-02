@@ -104,7 +104,67 @@ dependency — every case is a plain Vitest unit test.
   `itemsByCategory` always has an entry for every registered category
   (zero-filled), so the UI never has to guess about missing keys.
 
-## Repository port
+## Settings
+
+```ts
+interface Settings {
+  theme: Theme // 'light' | 'dark'
+  defaultSort: SortKey
+  defaultCategory: CategoryId
+  defaultStatus: Status
+}
+```
+
+`DEFAULT_SETTINGS` (`src/domain/entities/settings.ts`) is the sensible
+out-of-the-box starting point (`dark`, `recently-added`, `games`,
+`backlog`). Like `Item`, every change goes through one validated function:
+
+- **`applySettingsChanges(settings, changes)`** — re-validates any field
+  being changed against its value set (`Theme`, `SortKey`, `CategoryId`,
+  `Status`) and merges it onto the current settings; throws
+  `DomainValidationError` for an unrecognized value. Reused twice outside
+  the obvious `updateSettings` use-case: `LocalStorageSettingsRepository`
+  calls it to validate whatever was in storage, so a corrupted or
+  hand-edited single field falls back to its default instead of the whole
+  settings object being discarded.
+
+`defaultCategory`/`defaultStatus` seed Quick Capture's initial category
+selection and the status new items are created with; `defaultSort` seeds
+Discovery's initial sort control. None of these are enforced by
+`createItem` itself, which still defaults to `'backlog'`/`'medium'` when
+called with no explicit values — the settings-driven defaults are applied
+by the presentation layer when it calls `createItem`.
+
+## Item envelope (shared by storage and Import/Export)
+
+```ts
+interface ItemEnvelope {
+  version: number
+  items: readonly Item[]
+}
+```
+
+`createItemEnvelope(items)` / `parseItemEnvelope(raw)`
+(`src/domain/services/item-envelope.ts`) are the one place that defines
+"what a serialized list of items looks like." `parseItemEnvelope` never
+throws; it returns `{ items, warning, envelopeValid }`:
+
+- `envelopeValid: false` — `raw` wasn't recognizable as an envelope at all
+  (invalid JSON, or valid JSON missing the `{ version, items[] }` shape).
+  `items` is always `[]` in this case, and callers must not use it to
+  overwrite existing data.
+- `envelopeValid: true` — the envelope shape was recognized, even if
+  individual items inside it were dropped for being malformed (reported
+  via `warning`) or the list is legitimately empty.
+
+This distinction is why `importItems` only calls `replaceAll` when
+`envelopeValid` is true: a garbage file leaves the current backlog
+untouched, while a genuinely empty backup still replaces it as expected.
+`LocalStorageItemRepository`'s serialization and the user-facing
+Export/Import feature both build on this one module rather than each
+re-implementing "is this a plausible `Item`."
+
+## Repository ports
 
 ```ts
 interface ItemRepository {
@@ -112,9 +172,14 @@ interface ItemRepository {
   getById(id: ItemId): Promise<Item | null>
   save(item: Item): Promise<void> // upsert
   delete(id: ItemId): Promise<void>
-  replaceAll(items: readonly Item[]): Promise<void> // for future import
+  replaceAll(items: readonly Item[]): Promise<void> // used by Import
+}
+
+interface SettingsRepository {
+  get(): Promise<Settings> // never fails — resolves to DEFAULT_SETTINGS on corruption
+  save(settings: Settings): Promise<void>
 }
 ```
 
-Declared in the domain layer (`src/domain/repositories/item-repository.ts`)
-since it's part of the ubiquitous language, implemented in infrastructure.
+Declared in the domain layer (`src/domain/repositories/`) since they're
+part of the ubiquitous language, implemented in infrastructure.

@@ -92,21 +92,73 @@ doesn't exist.
 **Result:** 125 tests total, all four layers still green, `pnpm typecheck`
 / `pnpm lint` / `pnpm build` all clean.
 
-## Milestone 4 — Settings + Import/Export
+## Milestone 4 — Settings + Import/Export (done)
 
-- Domain/infra: a `SettingsRepository` port + LocalStorage adapter,
-  following the exact same pattern as `ItemRepository` (versioned
-  envelope, contract-tested). Settings: theme, default sort, default
-  category, default status.
-- Application: `getSettings`/`updateSettings` use-cases; `exportItems`
-  (serialize the full backlog to a downloadable JSON file) and
-  `importItems` (parse + validate + `replaceAll`, reusing the same
-  malformed-data recovery approach already proven in
-  `infrastructure/storage/serialization.ts`).
-- Presentation: `SettingsPage` replacing its stub — theme toggle (backed
-  by the `.dark` class already wired into `index.css`), defaults pickers,
-  backup/restore buttons.
+1. **Domain** — `Theme` (following the `Status`/`Priority` pattern) and
+   the `Settings` entity with `applySettingsChanges` (validated
+   field-by-field merge, mirroring `applyItemUpdate`). Extracted the item
+   envelope validate/serialize logic that used to live only in
+   `infrastructure/storage/serialization.ts` into
+   `domain/services/item-envelope.ts` (`createItemEnvelope`,
+   `parseItemEnvelope`) — pure data-shape validation with zero
+   `localStorage` dependency, reused by both the LocalStorage adapter and
+   the new Import/Export use-cases. Gave `parseItemEnvelope` an explicit
+   `envelopeValid` flag (rather than inferring it from the warning
+   string) so a totally garbage import leaves the existing backlog
+   untouched instead of wiping it, while a legitimately empty backup
+   still replaces it. 15 tests, no I/O; `serialization.ts`'s existing
+   tests passed unchanged, confirming the refactor was
+   behavior-preserving.
+2. **Infrastructure** — `SettingsRepository` port, `InMemorySettingsRepository`,
+   `LocalStorageSettingsRepository` (recovers to `DEFAULT_SETTINGS` on
+   corruption by reusing `applySettingsChanges` for validation instead of
+   a separate duplicated type guard), shared contract test. 10 tests.
+3. **Application** — `getSettings`/`updateSettings`; `exportItems`
+   (serializes the full backlog via `createItemEnvelope`) and
+   `importItems` (parses via `parseItemEnvelope`, only replaces the
+   backlog when `envelopeValid` is true). `di.ts` now takes both an
+   `ItemRepository` and a `SettingsRepository`, independently injectable.
+   11 tests.
+4. **Presentation** — `SettingsPage` replacing its stub: theme/default-
+   sort/default-category/default-status pickers (auto-save per field),
+   Export (downloads a JSON file via `shared/download-text-file.ts`) and
+   Import (confirms before replacing the backlog, reports item count +
+   any warning). `useApplyTheme` toggles `<html>`'s `dark` class from the
+   persisted theme, mounted once in `AppShell`. `QuickCaptureModal` was
+   refactored into an outer shell + inner `QuickCaptureForm` that only
+   mounts while open, so it always seeds fresh state from the current
+   `defaultCategory`/`defaultStatus`; `DiscoveryPage` gates on settings
+   loading and seeds its sort control from `defaultSort` the same way —
+   both avoid a `setState`-in-`useEffect` sync by mounting the
+   state-owning component only once the data its initial state depends on
+   is available. RTL-tested and verified live in the browser: theme
+   toggle persists through reload, Quick Capture pre-fills the configured
+   default category, Export produces a real download, and a
+   JS-simulated file-input Import correctly replaced the entire backlog.
 
-Each milestone follows the same discipline as Milestone 1: tests written
-first, one meaningful commit per vertical slice, verified live in the
-browser before moving on.
+**Result:** 170 tests total, all four layers still green, `pnpm typecheck`
+/ `pnpm lint` / `pnpm build` all clean. Every section of the original spec
+is implemented: Dashboard, Discovery, Goals, Quick Capture, Item Details,
+Settings, and Import/Export.
+
+## Summary
+
+Four milestones, ~22 commits, every unit written test-first. The
+architecture held up unchanged from Milestone 1 to Milestone 4 — no layer
+was reshuffled, no dependency direction was violated, and the two
+repository ports (`ItemRepository`, `SettingsRepository`) remain the only
+places LocalStorage-specific code exists. Recurring patterns that emerged
+along the way and are documented for future extension:
+
+- **Data-driven extension points** (`CATEGORY_REGISTRY` for categories,
+  the same shape used for `Status`/`Priority`/`SortKey`/`Theme`) so adding
+  a new value never means touching a service or use-case.
+- **Shared contract tests** for every repository pair, so a real adapter
+  and its in-memory double can't silently drift apart.
+- **"Mount only once the data your initial state needs exists"** instead
+  of `useState` + a syncing `useEffect`, used consistently in
+  `ItemDetailDrawer`, `QuickCaptureModal`, and `DiscoveryPage`.
+
+Each milestone followed the same discipline: tests written first, one
+meaningful commit per vertical slice, verified live in the browser before
+moving on.

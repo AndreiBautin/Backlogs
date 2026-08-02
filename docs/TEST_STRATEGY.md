@@ -1,15 +1,15 @@
 # Test Strategy
 
 Tests are colocated with source (`x.ts` + `x.test.ts`, `X.tsx` + `X.test.tsx`)
-using Vitest, `jsdom`, and React Testing Library. As of Milestone 3: **125
-tests across 27 files, all layers, zero skipped.**
+using Vitest, `jsdom`, and React Testing Library. As of Milestone 4 (spec
+complete): **170 tests across 37 files, all layers, zero skipped.**
 
-| Layer          | What's tested                     | How                                                                                                          | Mocks needed                       |
-| -------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
-| domain         | entities, value objects, services | plain Vitest unit tests                                                                                      | none                               |
-| application    | use-cases                         | run against `InMemoryItemRepository`                                                                         | none                               |
-| infrastructure | both `ItemRepository` adapters    | shared contract suite + adapter-specific tests                                                               | none (real `jsdom` `localStorage`) |
-| presentation   | critical flows only               | React Testing Library + `userEvent`, rendered under `AppProviders` with an injected `InMemoryItemRepository` | none                               |
+| Layer          | What's tested                     | How                                                                                                     | Mocks needed                       |
+| -------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| domain         | entities, value objects, services | plain Vitest unit tests                                                                                 | none                               |
+| application    | use-cases                         | run against `InMemoryItemRepository`/`InMemorySettingsRepository`                                       | none                               |
+| infrastructure | both repositories' adapters       | shared contract suites + adapter-specific tests                                                         | none (real `jsdom` `localStorage`) |
+| presentation   | critical flows only               | React Testing Library + `userEvent`, rendered under `AppProviders` with injected in-memory repositories | none                               |
 
 No layer above domain needs a mocking library. The in-memory repository and
 dependency injection through `AppProviders`/`renderWithProviders` are
@@ -33,26 +33,29 @@ never partial or with a failing suite.
   a fully valid `Item` via the real `createItem` factory (with a fixed
   clock) plus a field-override spread. Used everywhere a test needs an
   `Item` without hand-rolling every field.
-- **`src/infrastructure/storage/item-repository.contract.ts`** —
-  `itBehavesLikeAnItemRepository(createRepository)`, a shared Vitest
-  `describe` block run against both `InMemoryItemRepository` and
-  `LocalStorageItemRepository`. Guarantees the two stay behaviorally
-  interchangeable (upsert semantics, delete-of-unknown-id is a no-op,
-  `replaceAll` overwrites), not just type-compatible. Clears
-  `window.localStorage` between tests — a no-op for the in-memory double,
-  essential isolation for the real adapter (real `localStorage` is a
-  shared global across `it()` blocks).
+- **`src/infrastructure/storage/item-repository.contract.ts`** and
+  **`settings-repository.contract.ts`** —
+  `itBehavesLikeAnItemRepository`/`itBehavesLikeASettingsRepository`,
+  shared Vitest `describe` blocks each run against both the in-memory and
+  LocalStorage adapter of their repository. Guarantee the two stay
+  behaviorally interchangeable (upsert semantics, delete-of-unknown-id is
+  a no-op, `replaceAll` overwrites, `get()` never fails), not just
+  type-compatible. Clear `window.localStorage` between tests — a no-op for
+  the in-memory doubles, essential isolation for the real adapters (real
+  `localStorage` is a shared global across `it()` blocks).
 - **`src/test/render-with-providers.tsx`** — renders a component tree under
-  `AppProviders`, backed by a fresh (or caller-seeded)
-  `InMemoryItemRepository`, so presentation tests exercise the exact same
+  `AppProviders`, backed by fresh (or caller-seeded) in-memory item and
+  settings repositories, so presentation tests exercise the exact same
   TanStack Query + context wiring the app uses, without ever touching real
   `localStorage`.
 - **`src/test/setup.ts`** — global setup: `@testing-library/jest-dom`
   matchers, RTL `cleanup()` and Zustand UI-store reset after every test
   (the store is a module-level singleton and would otherwise leak state
-  between test files), and jsdom polyfills for the Pointer Events capture
-  API and `scrollIntoView` that Radix UI's Select/Dialog primitives call
-  but jsdom doesn't implement.
+  between test files); jsdom polyfills for the Pointer Events capture API
+  and `scrollIntoView` that Radix UI's Select/Dialog primitives call, and
+  for `URL.createObjectURL`/`revokeObjectURL` that Settings' "Export
+  backup" button calls, none of which jsdom implements; and a raised
+  `asyncUtilTimeout` (see below).
 
 ## What's _not_ separately unit-tested
 
@@ -73,11 +76,21 @@ pnpm lint         # type-aware ESLint (strictTypeChecked + stylisticTypeChecked)
 pnpm build        # tsc -b && vite build
 ```
 
-## Milestone 4+ additions
+## Notes from building out the spec
 
-Settings and Import/Export will need their own repository/use-case tests
-following the exact same patterns established here (in-memory fakes, no
-mocks, contract tests for any new persistence adapter).
+### A global timeout fix from Settings
+
+Once `QuickCaptureModal` and `DiscoveryPage` started reading settings
+before mounting their real content (see `ARCHITECTURE.md`'s "gate on
+settings load" pattern), page-level RTL tests gained an extra sequential
+async hop. That made the default 1000ms `findBy*`/`waitFor` timeout
+occasionally too tight under this machine's full 37-file parallel suite —
+`DiscoveryPage`'s "shows every item by default" test flaked once. Rather
+than bump timeouts test-by-test as this kept coming up, `configure({
+asyncUtilTimeout: 5000 })` was added once in `src/test/setup.ts`. If a new
+page adds another sequential data dependency and starts flaking under
+full-suite runs, this is the first place to look before reaching for a
+per-test timeout again.
 
 ### A flakiness note from Discovery
 

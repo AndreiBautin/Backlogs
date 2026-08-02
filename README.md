@@ -5,6 +5,22 @@ consume next and cut decision fatigue. Games, TV, movies, anime, books,
 manga, podcasts, music, YouTube, courses — one place, no social features,
 no ratings, no accounts, no cloud.
 
+## Features
+
+- **Dashboard** — Continue, Start Next, Recently Finished, Recently Added,
+  and quick stats, all computed the moment you open the app.
+- **Quick Capture** — press `N` anywhere, title + category is all it takes.
+- **Discovery** — free-text search plus category/status/priority/
+  platform/tag filters and five sort orders.
+- **Item Details** — a drawer to edit status, priority, platform, and
+  notes; dates are tracked automatically.
+- **Goals** — completion streak, completions this month/year, average
+  completions per month, average backlog age, and your oldest unfinished
+  item.
+- **Settings** — theme, and defaults for sort/category/status.
+- **Backup / Restore** — export your whole backlog to a JSON file, import
+  it back (or on a different device) at any time.
+
 ## Stack
 
 React + TypeScript (strict) + Vite, React Router, TanStack Query, Zustand,
@@ -34,5 +50,5 @@ Press **N** anywhere in the app to quick-capture a new item.
   priority, the domain services.
 - [Test strategy](docs/TEST_STRATEGY.md) — what's tested at each layer,
   the TDD discipline, and the test helpers.
-- [Implementation plan](docs/IMPLEMENTATION_PLAN.md) — what's shipped
-  (Milestone 1) and the roadmap for Discovery, Goals, and Settings.
+- [Implementation plan](docs/IMPLEMENTATION_PLAN.md) — how the four
+  milestones were built, one vertical slice at a time.
