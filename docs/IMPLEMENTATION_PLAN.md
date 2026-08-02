@@ -43,16 +43,29 @@ guards); `QuickCaptureModal` is simply its first caller. Keeping it in
 out to be, without an item-specific import path implying a dependency that
 doesn't exist.
 
-## Milestone 2 — Discovery
+## Milestone 2 — Discovery (done)
 
-- Domain: `filterItems(items, filters)` and `sortItems(items, sortKey)` as
-  pure functions (category / status / priority / platform / tags filters;
-  recently-added / alphabetical / priority / recently-completed /
-  recently-updated sorts).
-- Application: a `listItems` use-case variant (or extended signature) that
-  accepts filter/sort options.
-- Presentation: `DiscoveryPage` replacing its current stub — search input,
-  filter controls, sort control, reusing `ItemCard`.
+1. **Domain** — `filterItems(items, filters)` (category / status /
+   priority / platform / tags, all AND'd, plus a case-insensitive search
+   over title/notes/tags) and `sortItems(items, sortKey)` (recently-added,
+   alphabetical, priority, recently-completed, recently-updated), plus
+   `SortKey`/`SORT_KEY_LABELS` following the Status/Priority pattern. 20
+   tests, no I/O.
+2. **Application** — `listItems` extended to accept optional
+   `{ filters, sortKey }`, composing the two new domain services over the
+   repository's full snapshot. `useItemsQuery` takes the same options and
+   folds them into its query key so filtered/sorted queries cache
+   separately from the plain call the Item Detail drawer still makes.
+3. **Presentation** — `DiscoveryPage` replacing its stub: free-text search,
+   category/status/priority filters, platform/tag filters populated from
+   values actually present in the backlog, a sort control, a Clear
+   filters button, and an empty state. RTL-tested and verified live in
+   the browser.
+
+**Result:** 109 tests total, all four layers still green, `pnpm typecheck`
+/ `pnpm lint` / `pnpm build` all clean.
+
+## Milestone 3 — Goals
 
 ## Milestone 3 — Goals
 

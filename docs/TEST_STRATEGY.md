@@ -1,8 +1,8 @@
 # Test Strategy
 
 Tests are colocated with source (`x.ts` + `x.test.ts`, `X.tsx` + `X.test.tsx`)
-using Vitest, `jsdom`, and React Testing Library. As of Milestone 1: **81
-tests across 20 files, all layers, zero skipped.**
+using Vitest, `jsdom`, and React Testing Library. As of Milestone 2: **109
+tests across 24 files, all layers, zero skipped.**
 
 | Layer          | What's tested                     | How                                                                                                          | Mocks needed                       |
 | -------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
@@ -73,10 +73,20 @@ pnpm lint         # type-aware ESLint (strictTypeChecked + stylisticTypeChecked)
 pnpm build        # tsc -b && vite build
 ```
 
-## Milestone 2+ additions
+## Milestone 3+ additions
 
-Discovery (search/filter/sort) will need `filterItems`/`sortItems` domain
-service tests; Goals will need streak/backlog-age service tests; Settings
-and Import/Export will need their own repository/use-case tests following
-the exact same patterns established here (in-memory fakes, no mocks,
-contract tests for any new persistence adapter).
+Goals will need streak/backlog-age service tests; Settings and
+Import/Export will need their own repository/use-case tests following the
+exact same patterns established here (in-memory fakes, no mocks, contract
+tests for any new persistence adapter).
+
+### A flakiness note from Discovery
+
+One RTL test (`DiscoveryPage > shows an empty state when nothing matches`)
+timed out under the full 24-file parallel suite despite passing reliably
+in isolation — `userEvent.type` firing a query refetch per keystroke,
+multiplied by CPU contention across parallel workers, occasionally
+exceeded Vitest's 5s default. Fixed by shortening the typed string and
+giving that one test a 10s timeout, rather than loosening the global
+default for every test. Worth remembering if a future RTL test that types
+a long string starts flaking only in full-suite runs.
