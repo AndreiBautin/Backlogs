@@ -30,6 +30,12 @@ in SQLite or a real API later touches one file.
 
 ## Getting started
 
+**Windows:** double-click [`start.bat`](start.bat) — it installs
+dependencies on first run, starts the dev server in its own window, and
+opens the app in your browser.
+
+**Manual / other platforms:**
+
 ```bash
 pnpm install
 pnpm dev        # http://localhost:5173
