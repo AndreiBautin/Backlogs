@@ -1,3 +1,4 @@
+import { isPlausibleDailyGoal, isPlausibleProgressEntry } from '../entities/daily-goal'
 import type { Item } from '../entities/item'
 
 export const ITEM_ENVELOPE_VERSION = 1
@@ -40,6 +41,29 @@ export function isPlausibleItem(value: unknown): value is Item {
   )
 }
 
+/**
+ * Repairs the daily-goal fields of an otherwise-plausible item. Backlogs
+ * saved before daily goals existed carry neither field, so a missing log
+ * becomes an empty one here rather than an undefined-is-not-iterable crash
+ * later; a malformed goal or log entry is dropped on its own instead of
+ * taking the whole item down with it.
+ */
+function normalizeItem(item: Item): Item {
+  const raw = item as unknown as Record<string, unknown>
+  const rawProgress = raw.dailyProgress
+
+  const { dailyGoal: storedGoal, ...withoutGoal } = item
+  void storedGoal
+
+  return {
+    ...withoutGoal,
+    dailyProgress: Array.isArray(rawProgress)
+      ? rawProgress.filter(isPlausibleProgressEntry)
+      : [],
+    ...(isPlausibleDailyGoal(raw.dailyGoal) && { dailyGoal: raw.dailyGoal }),
+  }
+}
+
 /** The shape shared by both the LocalStorage envelope and the user-facing export file. */
 export function createItemEnvelope(items: readonly Item[]): ItemEnvelope {
   return { version: ITEM_ENVELOPE_VERSION, items: [...items] }
@@ -71,7 +95,7 @@ export function parseItemEnvelope(raw: string): ParsedItemEnvelope {
     return { items: [], warning: 'Unexpected data shape', envelopeValid: false }
   }
 
-  const validItems = parsed.items.filter(isPlausibleItem)
+  const validItems = parsed.items.filter(isPlausibleItem).map(normalizeItem)
   const warning =
     validItems.length !== parsed.items.length ? 'Dropped malformed item(s)' : null
 

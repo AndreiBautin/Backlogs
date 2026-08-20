@@ -49,3 +49,61 @@ describe('createItemEnvelope / parseItemEnvelope', () => {
     expect(result.envelopeValid).toBe(true)
   })
 })
+
+describe('parseItemEnvelope daily-goal normalization', () => {
+  /** Backlogs saved before daily goals existed have neither field. */
+  function legacyRaw(overrides: Record<string, unknown> = {}): string {
+    const { dailyProgress, dailyGoal, ...legacyItem } = buildItem()
+    void dailyProgress
+    void dailyGoal
+    return JSON.stringify({ version: 1, items: [{ ...legacyItem, ...overrides }] })
+  }
+
+  it('gives an item saved before daily goals an empty progress log', () => {
+    const { items, warning } = parseItemEnvelope(legacyRaw())
+
+    expect(items[0]?.dailyProgress).toEqual([])
+    expect(warning).toBeNull()
+  })
+
+  it('keeps a well-formed daily goal and its progress log', () => {
+    const raw = legacyRaw({
+      dailyGoal: { amount: 2, unit: 'episode' },
+      dailyProgress: [{ date: '2026-08-19', amount: 2 }],
+    })
+
+    const { items } = parseItemEnvelope(raw)
+
+    expect(items[0]).toMatchObject({
+      dailyGoal: { amount: 2, unit: 'episode' },
+      dailyProgress: [{ date: '2026-08-19', amount: 2 }],
+    })
+  })
+
+  it('drops a malformed daily goal rather than the whole item', () => {
+    const { items } = parseItemEnvelope(legacyRaw({ dailyGoal: { amount: 0 } }))
+
+    expect(items).toHaveLength(1)
+    expect(items[0]?.dailyGoal).toBeUndefined()
+  })
+
+  it('drops only the malformed entries from a progress log', () => {
+    const raw = legacyRaw({
+      dailyGoal: { amount: 1, unit: 'chapter' },
+      dailyProgress: [
+        { date: 'yesterday', amount: 1 },
+        { date: '2026-08-19', amount: 1 },
+      ],
+    })
+
+    const { items } = parseItemEnvelope(raw)
+
+    expect(items[0]?.dailyProgress).toEqual([{ date: '2026-08-19', amount: 1 }])
+  })
+
+  it('recovers from a progress log that is not an array', () => {
+    const { items } = parseItemEnvelope(legacyRaw({ dailyProgress: 'nope' }))
+
+    expect(items[0]?.dailyProgress).toEqual([])
+  })
+})

@@ -1,5 +1,6 @@
 import { EmptyState } from '@/components/shared/EmptyState'
 import type { Item } from '@/domain/entities/item'
+import { DailyGoalsPanel } from '@/features/goals/components/DailyGoalsPanel'
 import { ItemCard } from '@/features/items/components/ItemCard'
 import { useItemUiStore } from '@/features/items/store/use-item-ui-store'
 
@@ -60,6 +61,12 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-8 p-8">
+      <DailyGoalsPanel
+        title="Today"
+        hideWhenEmpty={sections.continue.length === 0}
+        emptyMessage="No daily goals yet — open something you’re working through to set one."
+      />
+
       <QuickStats stats={stats} />
 
       <DashboardSection

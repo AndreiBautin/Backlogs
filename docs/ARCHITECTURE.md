@@ -18,9 +18,11 @@ domain  <—  application  <—  infrastructure
 Pure TypeScript. No React, no browser APIs, no I/O. Fully unit-testable
 without mocks.
 
-- **entities/** — `Item`, plus `createItem`/`applyItemUpdate` factory
-  functions that own every business rule (validation, default values, the
-  auto-stamp-`dateStarted`/`dateCompleted` rule); `Settings`, plus
+- **entities/** — `Item`, plus `createItem`/`applyItemUpdate`/
+  `logDailyProgress` factory functions that own every business rule
+  (validation, default values, the auto-stamp-`dateStarted`/
+  `dateCompleted` rule); `DailyGoal`/`DailyProgressEntry` and their
+  local-calendar-day helpers in `daily-goal.ts`; `Settings`, plus
   `applySettingsChanges`, validating each field the same way
   `applyItemUpdate` does.
 - **value-objects/** — `ItemId`, a branded string with a `createItemId()`
@@ -39,7 +41,9 @@ without mocks.
   completion %, items-by-category), `filterItems`/`sortItems` (Discovery's
   search/filter/sort), `getGoalsStats` (streak, completion averages,
   backlog age, oldest unfinished item — reuses `getCompletionStats`
-  internally rather than duplicating its logic), and `item-envelope`
+  internally rather than duplicating its logic), `getDailyGoalBoard`
+  (today's per-item check-in: what's logged, what's met, and the streak
+  behind each), and `item-envelope`
   (`createItemEnvelope`/`parseItemEnvelope`, the shared `{ version, items }`
   shape used by both the LocalStorage adapter and Import/Export —
   `parseItemEnvelope` never throws and reports `envelopeValid` separately
@@ -70,7 +74,12 @@ storage or mocks.
   untouched instead of wiping it).
 - **use-cases/dashboard/** — `getDashboardData`, which composes both domain
   stats services into one payload for the presentation layer.
-- **use-cases/goals/** — `getGoalsData`, wrapping `getGoalsStats`.
+- **use-cases/goals/** — `getGoalsData`, wrapping `getGoalsStats`;
+  `getDailyGoals`, wrapping `getDailyGoalBoard`; and `logDailyProgress`,
+  which records a day's progress (throwing `ItemNotFoundError` for an
+  unknown id, and letting the domain refuse an item with no goal). Kept
+  out of `updateItem` because the domain treats logging as appending to a
+  log, not editing a field.
 - **use-cases/settings/** — `getSettings`, `updateSettings` (validated
   merge via `applySettingsChanges`).
 - **errors/** — `ItemNotFoundError`.
@@ -127,6 +136,8 @@ never the source of truth for persisted data; that always flows through
 ## features/ — `src/features` (presentation, feature-first)
 
 - **dashboard/** — `DashboardPage`, `QuickStats`, `useDashboardDataQuery`.
+  Opens with the compact "Today" daily check-in, which hides itself
+  entirely when nothing is in progress (nothing to nag about yet).
 - **items/** — `QuickCaptureModal` (an outer shell + inner
   `QuickCaptureForm` that only mounts while the dialog is open, so every
   open gets fresh state seeded from the current settings' default
@@ -141,7 +152,15 @@ never the source of truth for persisted data; that always flows through
   "gate on the settings load, then mount with props-derived initial
   state" pattern as Quick Capture).
 - **goals/** — `GoalsPage`, `useGoalsDataQuery`: streak, completion
-  averages, backlog age, oldest unfinished item.
+  averages, backlog age, oldest unfinished item. Also owns the daily
+  check-in, which spans two pages: `DailyGoalsPanel` (query + mutation +
+  summary), `DailyGoalRow` (one item's goal, count, and +1/undo controls)
+  and `DailyGoalHistory` (the 14-day strip), with `useDailyGoalsQuery`/
+  `useLogDailyProgressMutation`. `DashboardPage` renders the same panel
+  compactly; the Goals page passes `showHistory`. One component, two
+  densities — rather than a second implementation on the Dashboard.
+  A goal itself is set on the item, in `ItemDetailDrawer`, seeded from
+  the category's `suggestedGoalUnit`.
 - **settings/** — `SettingsPage`: theme/default-sort/default-category/
   default-status pickers (auto-save per field) and Backup/Restore
   (Export downloads a JSON file; Import confirms before replacing the

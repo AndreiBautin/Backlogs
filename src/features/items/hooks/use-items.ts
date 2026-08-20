@@ -8,6 +8,7 @@ import type { ItemId } from '@/domain/value-objects/item-id'
 export const itemsQueryKey = ['items'] as const
 export const dashboardQueryKey = ['dashboard'] as const
 export const goalsQueryKey = ['goals'] as const
+export const dailyGoalsQueryKey = ['daily-goals'] as const
 
 export function useItemsQuery(options: ListItemsOptions = {}) {
   const { listItems } = useUseCases()
@@ -17,12 +18,14 @@ export function useItemsQuery(options: ListItemsOptions = {}) {
   })
 }
 
-function useInvalidateItemQueries() {
+/** Every query that a change to an item can invalidate — shared by all item mutations. */
+export function useInvalidateItemQueries() {
   const queryClient = useQueryClient()
   return () => {
     void queryClient.invalidateQueries({ queryKey: itemsQueryKey })
     void queryClient.invalidateQueries({ queryKey: dashboardQueryKey })
     void queryClient.invalidateQueries({ queryKey: goalsQueryKey })
+    void queryClient.invalidateQueries({ queryKey: dailyGoalsQueryKey })
   }
 }
 

@@ -3,6 +3,14 @@ import { DomainValidationError } from '../errors/domain-validation-error'
 import { isPriority, type Priority } from '../priority/priority'
 import { isStatus, type Status } from '../status/status'
 import { createItemId, type ItemId } from '../value-objects/item-id'
+import {
+  applyProgressDelta,
+  requireDailyGoal,
+  toDateKey,
+  type DailyGoal,
+  type DailyGoalInput,
+  type DailyProgressEntry,
+} from './daily-goal'
 
 export interface Item {
   readonly id: ItemId
@@ -15,6 +23,8 @@ export interface Item {
   readonly notes?: string
   readonly tags: readonly string[]
   readonly favorite: boolean
+  readonly dailyGoal?: DailyGoal
+  readonly dailyProgress: readonly DailyProgressEntry[]
   readonly dateAdded: string
   readonly dateStarted?: string
   readonly dateCompleted?: string
@@ -31,6 +41,7 @@ export interface CreateItemInput {
   notes?: string
   tags?: readonly string[]
   favorite?: boolean
+  dailyGoal?: DailyGoalInput
 }
 
 export interface ItemChanges {
@@ -43,6 +54,8 @@ export interface ItemChanges {
   notes?: string
   tags?: readonly string[]
   favorite?: boolean
+  /** A goal to set, or `null` to drop the item's daily goal entirely. */
+  dailyGoal?: DailyGoalInput | null
   dateStarted?: string
   dateCompleted?: string
 }
@@ -50,6 +63,13 @@ export interface ItemChanges {
 export interface ItemClock {
   now?: () => Date
   generateId?: () => ItemId
+}
+
+export interface LogDailyProgressInput {
+  /** The day being logged against. Defaults to the clock's current day. */
+  on?: Date
+  /** Units to add; negative undoes progress. Defaults to one unit. */
+  delta?: number
 }
 
 function requireTitle(title: string): string {
@@ -94,6 +114,7 @@ export function createItem(input: CreateItemInput, deps: ItemClock = {}): Item {
     priority: input.priority !== undefined ? requirePriority(input.priority) : 'medium',
     tags: input.tags ?? [],
     favorite: input.favorite ?? false,
+    dailyProgress: [],
     dateAdded: timestamp,
     lastUpdated: timestamp,
     ...(input.platform !== undefined && { platform: input.platform }),
@@ -101,7 +122,21 @@ export function createItem(input: CreateItemInput, deps: ItemClock = {}): Item {
       estimatedLength: input.estimatedLength,
     }),
     ...(input.notes !== undefined && { notes: input.notes }),
+    ...(input.dailyGoal !== undefined && {
+      dailyGoal: requireDailyGoal(input.dailyGoal),
+    }),
   }
+}
+
+/** `undefined` change = leave as-is; `null` = clear; otherwise validate and set. */
+function resolveDailyGoal(
+  current: DailyGoal | undefined,
+  change: DailyGoalInput | null | undefined,
+): DailyGoal | undefined {
+  if (change === undefined) {
+    return current
+  }
+  return change === null ? undefined : requireDailyGoal(change)
 }
 
 export function applyItemUpdate(
@@ -129,9 +164,15 @@ export function applyItemUpdate(
   const dateStarted = changes.dateStarted ?? (startingNow ? timestamp : item.dateStarted)
   const dateCompleted =
     changes.dateCompleted ?? (completingNow ? timestamp : item.dateCompleted)
+  const dailyGoal = resolveDailyGoal(item.dailyGoal, changes.dailyGoal)
+
+  // Spreading `withoutGoal` rather than `item` is what lets a goal be *removed*:
+  // a conditional spread can add an optional key back, never take one away.
+  const { dailyGoal: currentGoal, ...withoutGoal } = item
+  void currentGoal
 
   return {
-    ...item,
+    ...withoutGoal,
     title,
     category,
     status,
@@ -144,5 +185,31 @@ export function applyItemUpdate(
     ...(notes !== undefined && { notes }),
     ...(dateStarted !== undefined && { dateStarted }),
     ...(dateCompleted !== undefined && { dateCompleted }),
+    ...(dailyGoal !== undefined && { dailyGoal }),
+  }
+}
+
+/**
+ * Records progress toward the item's daily goal. Kept separate from
+ * `applyItemUpdate` because it is an append to a log, not a field edit — and
+ * because it only makes sense for an item that actually has a goal.
+ */
+export function logDailyProgress(
+  item: Item,
+  input: LogDailyProgressInput = {},
+  deps: ItemClock = {},
+): Item {
+  if (item.dailyGoal === undefined) {
+    throw new DomainValidationError(`Item has no daily goal: ${item.title}`)
+  }
+
+  const now = deps.now ?? (() => new Date())
+  const timestamp = now()
+  const dateKey = toDateKey(input.on ?? timestamp)
+
+  return {
+    ...item,
+    dailyProgress: applyProgressDelta(item.dailyProgress, dateKey, input.delta ?? 1),
+    lastUpdated: timestamp.toISOString(),
   }
 }

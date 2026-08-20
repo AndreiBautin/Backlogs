@@ -1,5 +1,7 @@
 import { createGetDashboardDataUseCase } from '@/application/use-cases/dashboard/get-dashboard-data'
+import { createGetDailyGoalsUseCase } from '@/application/use-cases/goals/get-daily-goals'
 import { createGetGoalsDataUseCase } from '@/application/use-cases/goals/get-goals-data'
+import { createLogDailyProgressUseCase } from '@/application/use-cases/goals/log-daily-progress'
 import { createCreateItemUseCase } from '@/application/use-cases/items/create-item'
 import { createDeleteItemUseCase } from '@/application/use-cases/items/delete-item'
 import { createExportItemsUseCase } from '@/application/use-cases/items/export-items'
@@ -20,6 +22,8 @@ export interface AppUseCases {
   readonly listItems: ReturnType<typeof createListItemsUseCase>
   readonly getDashboardData: ReturnType<typeof createGetDashboardDataUseCase>
   readonly getGoalsData: ReturnType<typeof createGetGoalsDataUseCase>
+  readonly getDailyGoals: ReturnType<typeof createGetDailyGoalsUseCase>
+  readonly logDailyProgress: ReturnType<typeof createLogDailyProgressUseCase>
   readonly exportItems: ReturnType<typeof createExportItemsUseCase>
   readonly importItems: ReturnType<typeof createImportItemsUseCase>
   readonly getSettings: ReturnType<typeof createGetSettingsUseCase>
@@ -44,6 +48,8 @@ export function createAppUseCases(
     listItems: createListItemsUseCase(itemRepository),
     getDashboardData: createGetDashboardDataUseCase(itemRepository),
     getGoalsData: createGetGoalsDataUseCase(itemRepository),
+    getDailyGoals: createGetDailyGoalsUseCase(itemRepository),
+    logDailyProgress: createLogDailyProgressUseCase(itemRepository),
     exportItems: createExportItemsUseCase(itemRepository),
     importItems: createImportItemsUseCase(itemRepository),
     getSettings: createGetSettingsUseCase(settingsRepository),

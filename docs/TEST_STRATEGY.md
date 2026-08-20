@@ -1,8 +1,8 @@
 # Test Strategy
 
 Tests are colocated with source (`x.ts` + `x.test.ts`, `X.tsx` + `X.test.tsx`)
-using Vitest, `jsdom`, and React Testing Library. As of Milestone 4 (spec
-complete): **170 tests across 37 files, all layers, zero skipped.**
+using Vitest, `jsdom`, and React Testing Library. As of the daily-goals
+feature: **257 tests across 42 files, all layers, zero skipped.**
 
 | Layer          | What's tested                     | How                                                                                                     | Mocks needed                       |
 | -------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------- |
@@ -118,3 +118,19 @@ needs deterministic date-dependent RTL tests, the real fix is giving
 `GoalsPage`/`useGoalsDataQuery` an injectable clock the way the domain
 layer already has, rather than continuing to route around real time in
 tests.
+
+### Dates in daily-goal tests
+
+Daily goals made the above sharper, since every assertion is about "today."
+Two rules keep those tests stable:
+
+- **Domain and use-case tests pin the clock.** They pass an explicit `now`
+  and build dates with local constructors (`new Date(2026, 7, 19)`), never
+  ISO strings — `new Date('2026-08-19')` is parsed as UTC midnight, which
+  is the _previous_ local day west of Greenwich and would make the suite
+  pass or fail by timezone.
+- **RTL tests derive dates from the real clock.** `DailyGoalsPanel` goes
+  through `useDailyGoalsQuery`, which has no injectable clock, so its test
+  file computes `TODAY = toDateKey(new Date())` and shifts from there
+  rather than hardcoding a day. This is the same fix the Goals note above
+  describes, applied up front.

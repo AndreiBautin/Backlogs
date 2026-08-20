@@ -17,6 +17,8 @@ interface Item {
   notes?: string
   tags: readonly string[]
   favorite: boolean
+  dailyGoal?: DailyGoal // optional per-day target, e.g. 1 chapter
+  dailyProgress: readonly DailyProgressEntry[] // sparse log of days with progress
   dateAdded: string // ISO 8601, stamped on creation
   dateStarted?: string // ISO 8601, auto-stamped on first move to "currently-using"
   dateCompleted?: string // ISO 8601, auto-stamped on first move to "completed"
@@ -24,7 +26,7 @@ interface Item {
 }
 ```
 
-`Item` values are only ever produced by two domain functions
+`Item` values are only ever produced by three domain functions
 (`src/domain/entities/item.ts`), so every invariant below is enforced in
 exactly one place:
 
@@ -36,8 +38,43 @@ exactly one place:
   being changed, always bumps `lastUpdated`, and applies the auto-stamp
   business rule: the first time `status` moves to `'currently-using'`,
   `dateStarted` is set (if not already present); the first time it moves to
-  `'completed'`, `dateCompleted` is set (if not already present). Both
+  `'completed'`, `dateCompleted` is set (if not already present). Also
+  resolves `changes.dailyGoal`, where `undefined` means "leave alone" and
+  `null` means "remove the goal" — the one place an optional field is
+  genuinely _deleted_ rather than overwritten.
+- **`logDailyProgress(item, input?, deps?)`** — appends to `dailyProgress`
+  rather than editing a field, so it is deliberately not part of
+  `applyItemUpdate`. Throws if the item has no `dailyGoal`. All three
   functions accept optional `now`/`generateId` for deterministic tests.
+
+## Daily goals
+
+```ts
+interface DailyGoal {
+  amount: number // whole number, 1…99
+  unit: string // free text: 'chapter', 'episode', 'level'
+}
+
+interface DailyProgressEntry {
+  date: string // local calendar day, 'YYYY-MM-DD'
+  amount: number // always > 0 — a day drops out of the log when it hits zero
+}
+```
+
+Defined in `src/domain/entities/daily-goal.ts`, which also owns the
+calendar-day helpers (`toDateKey`, `shiftDateKey`), validation
+(`requireDailyGoal`), the display format (`formatDailyGoal` → "2
+episodes/day"), and the log update (`applyProgressDelta`).
+
+Two deliberate choices:
+
+- **Local days, not UTC.** A daily goal is a human, local-clock concept, so
+  `toDateKey` reads local date parts. `shiftDateKey` walks days through a
+  local `Date` + `setDate`, which keeps month, year, leap-day and DST
+  boundaries correct (a DST day is not 24 hours long).
+- **The log is sparse.** Only days with progress are stored, and undoing a
+  day back to zero removes its entry entirely, so the log never
+  accumulates empty days.
 
 ## CategoryId
 
@@ -56,8 +93,9 @@ type CategoryId =
 ```
 
 Defined by `CATEGORY_REGISTRY` (`src/domain/categories/category-registry.ts`),
-an array of `{ id, label, icon, suggestedPlatforms }`. The type is _derived_
-from the array (`(typeof CATEGORY_REGISTRY)[number]['id']`) rather than
+an array of `{ id, label, icon, suggestedGoalUnit, suggestedPlatforms }`.
+The type is _derived_ from the array
+(`(typeof CATEGORY_REGISTRY)[number]['id']`) rather than
 declared separately, so the ten categories in the spec and the TypeScript
 union can never drift apart. **This is the extension point**: a new
 category is a new array entry, full stop — no domain service or use-case
@@ -66,6 +104,11 @@ branches on a specific category id.
 `suggestedPlatforms` is a UX hint only (used to prefill/suggest values in
 the UI); `platform` on `Item` remains a free-text string, matching the
 spec's "these should be configurable" note on platforms.
+`suggestedGoalUnit` works the same way — `'chapter'` for books,
+`'episode'` for shows, `'level'` for games — seeding the daily-goal unit
+field so the common case needs no typing. Like `platform`, the stored
+`DailyGoal.unit` stays free text, and adding a category still means one
+array entry and nothing else.
 
 ## Status
 
@@ -103,6 +146,18 @@ dependency — every case is a plain Vitest unit test.
   `{ totalBacklog, completedThisMonth, completedThisYear, completionPercentage, itemsByCategory }`.
   `itemsByCategory` always has an entry for every registered category
   (zero-filled), so the UI never has to guess about missing keys.
+- **`getDailyGoalBoard(items, now, recentDayCount = 14)`** →
+  `{ statuses, metCount, totalCount, allMet }`, the daily check-in.
+  - Only items that are **both** `'currently-using'` **and** have a
+    `dailyGoal` are included: a goal on a paused or backlogged item stays
+    configured but stops asking for attention.
+  - Each `status` carries `{ item, goal, loggedToday, target, isMet, currentStreak, longestStreak, recentDays }`.
+  - `currentStreak` counts consecutive met days ending today, or ending
+    _yesterday_ when today hasn't been logged yet. That grace day is
+    deliberate: a streak should die only once a day has been fully missed,
+    not the moment a new day starts.
+  - `statuses` is sorted by title, not by whether the goal is met, so the
+    list never reshuffles under the user's cursor as they log progress.
 
 ## Settings
 
@@ -163,6 +218,15 @@ untouched, while a genuinely empty backup still replaces it as expected.
 `LocalStorageItemRepository`'s serialization and the user-facing
 Export/Import feature both build on this one module rather than each
 re-implementing "is this a plausible `Item`."
+
+Every item that survives the plausibility check is then **normalized**:
+a missing `dailyProgress` becomes `[]`, and a malformed `dailyGoal` or log
+entry is dropped on its own rather than taking the whole item with it.
+This is what keeps backlogs and export files written before daily goals
+existed loading cleanly — the envelope stays at `version: 1` because old
+data is still valid data, not data needing migration. It is also why
+`dailyProgress` can be a required (non-optional) field on `Item` without
+every read site defending against `undefined`.
 
 ## Repository ports
 

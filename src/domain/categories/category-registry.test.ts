@@ -52,3 +52,17 @@ describe('isCategoryId', () => {
     expect(isCategoryId('not-a-category')).toBe(false)
   })
 })
+
+describe('suggestedGoalUnit', () => {
+  it('gives every category a unit a daily goal can be counted in', () => {
+    for (const category of CATEGORY_REGISTRY) {
+      expect(category.suggestedGoalUnit.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('suggests the unit each medium is actually consumed in', () => {
+    expect(getCategoryDefinition('books').suggestedGoalUnit).toBe('chapter')
+    expect(getCategoryDefinition('tv-shows').suggestedGoalUnit).toBe('episode')
+    expect(getCategoryDefinition('games').suggestedGoalUnit).toBe('level')
+  })
+})
