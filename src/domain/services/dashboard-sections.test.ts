@@ -23,33 +23,75 @@ describe('getDashboardSections', () => {
     expect(sections.continue.map((i) => i.title)).toEqual(['Fresh', 'Stale'])
   })
 
-  it('puts backlog items in startNext, ordered by priority then age', () => {
-    const low = buildItem({
-      title: 'Low priority',
+  it('puts one backlog item per category in startNext, ordered by priority then age', () => {
+    const gameLow = buildItem({
+      title: 'Low priority game',
+      category: 'games',
       status: 'backlog',
       priority: 'low',
       dateAdded: '2026-01-01T00:00:00.000Z',
     })
-    const highNewer = buildItem({
-      title: 'High, newer',
+    const bookHighNewer = buildItem({
+      title: 'High book, newer',
+      category: 'books',
       status: 'backlog',
       priority: 'high',
       dateAdded: '2026-02-01T00:00:00.000Z',
     })
-    const highOlder = buildItem({
-      title: 'High, older',
+    const movieHighOlder = buildItem({
+      title: 'High movie, older',
+      category: 'movies',
       status: 'backlog',
       priority: 'high',
       dateAdded: '2026-01-15T00:00:00.000Z',
     })
 
-    const sections = getDashboardSections([low, highNewer, highOlder])
+    const sections = getDashboardSections([gameLow, bookHighNewer, movieHighOlder])
 
     expect(sections.startNext.map((i) => i.title)).toEqual([
-      'High, older',
-      'High, newer',
-      'Low priority',
+      'High movie, older',
+      'High book, newer',
+      'Low priority game',
     ])
+  })
+
+  it('keeps only the best candidate from a category that dominates the backlog', () => {
+    const runnerUp = buildItem({
+      title: 'Second game',
+      category: 'games',
+      status: 'backlog',
+      priority: 'high',
+      dateAdded: '2026-02-01T00:00:00.000Z',
+    })
+    const best = buildItem({
+      title: 'Top game',
+      category: 'games',
+      status: 'backlog',
+      priority: 'high',
+      dateAdded: '2026-01-15T00:00:00.000Z',
+    })
+    const alsoRan = buildItem({
+      title: 'Low game',
+      category: 'games',
+      status: 'backlog',
+      priority: 'low',
+      dateAdded: '2026-01-01T00:00:00.000Z',
+    })
+
+    const sections = getDashboardSections([runnerUp, best, alsoRan])
+
+    expect(sections.startNext.map((i) => i.title)).toEqual(['Top game'])
+  })
+
+  it('surfaces every category with a backlog item, even past the section limit', () => {
+    const categories = ['games', 'books', 'movies', 'anime', 'manga', 'music'] as const
+    const items = categories.map((category) =>
+      buildItem({ title: `Next ${category}`, category, status: 'backlog' }),
+    )
+
+    const sections = getDashboardSections(items, 3)
+
+    expect(sections.startNext).toHaveLength(categories.length)
   })
 
   it('excludes wishlist items from startNext', () => {

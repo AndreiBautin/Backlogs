@@ -1,8 +1,10 @@
+import type { CategoryId } from '../categories/category-registry'
 import type { Item } from '../entities/item'
 import { PRIORITY_RANK } from '../priority/priority'
 
 export interface DashboardSections {
   readonly continue: readonly Item[]
+  /** The best backlog pick per category, so one category cannot crowd out the rest. */
   readonly startNext: readonly Item[]
   readonly recentlyFinished: readonly Item[]
   readonly recentlyAdded: readonly Item[]
@@ -14,6 +16,32 @@ function byDateDesc(getDate: (item: Item) => string) {
   return (a: Item, b: Item) => getDate(b).localeCompare(getDate(a))
 }
 
+function byPriorityThenAge(a: Item, b: Item): number {
+  const rankDiff = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
+  return rankDiff !== 0 ? rankDiff : a.dateAdded.localeCompare(b.dateAdded)
+}
+
+/**
+ * Picks the strongest backlog candidate in each category, then ranks those
+ * picks against each other. Deliberately not capped by `limit`: one entry per
+ * category is already a natural bound, and slicing would drop whole categories.
+ */
+function getStartNext(items: readonly Item[]): readonly Item[] {
+  const bestByCategory = new Map<CategoryId, Item>()
+
+  for (const item of items) {
+    if (item.status !== 'backlog') {
+      continue
+    }
+    const incumbent = bestByCategory.get(item.category)
+    if (!incumbent || byPriorityThenAge(item, incumbent) < 0) {
+      bestByCategory.set(item.category, item)
+    }
+  }
+
+  return [...bestByCategory.values()].sort(byPriorityThenAge)
+}
+
 /** Answers "what should I consume next?" from a snapshot of items. */
 export function getDashboardSections(
   items: readonly Item[],
@@ -22,14 +50,6 @@ export function getDashboardSections(
   const inProgress = items
     .filter((item) => item.status === 'currently-using')
     .sort(byDateDesc((item) => item.lastUpdated))
-    .slice(0, limit)
-
-  const startNext = items
-    .filter((item) => item.status === 'backlog')
-    .sort((a, b) => {
-      const rankDiff = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
-      return rankDiff !== 0 ? rankDiff : a.dateAdded.localeCompare(b.dateAdded)
-    })
     .slice(0, limit)
 
   const recentlyFinished = items
@@ -43,7 +63,7 @@ export function getDashboardSections(
 
   return {
     continue: inProgress,
-    startNext,
+    startNext: getStartNext(items),
     recentlyFinished,
     recentlyAdded,
   }

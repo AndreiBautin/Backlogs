@@ -8,6 +8,7 @@ import { useDashboardDataQuery } from './hooks/use-dashboard-data'
 
 interface DashboardSectionProps {
   title: string
+  description?: string
   items: readonly Item[]
   emptyMessage: string
   onSelectItem: (id: Item['id']) => void
@@ -15,13 +16,19 @@ interface DashboardSectionProps {
 
 function DashboardSection({
   title,
+  description,
   items,
   emptyMessage,
   onSelectItem,
 }: DashboardSectionProps) {
   return (
     <section>
-      <h2 className="text-foreground mb-3 text-sm font-semibold">{title}</h2>
+      <div className="mb-3">
+        <h2 className="text-foreground text-sm font-semibold">{title}</h2>
+        {description ? (
+          <p className="text-muted-foreground mt-0.5 text-xs">{description}</p>
+        ) : null}
+      </div>
       {items.length === 0 ? (
         <EmptyState message={emptyMessage} />
       ) : (
@@ -63,6 +70,7 @@ export function DashboardPage() {
       />
       <DashboardSection
         title="Start Next"
+        description="The top backlog pick in each category."
         items={sections.startNext}
         emptyMessage="Your backlog is empty — press N to add something."
         onSelectItem={selectItem}
