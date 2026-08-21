@@ -23,10 +23,23 @@ stats, and rankings actually have something to work with.
 
 Everything is editable. Anything you change is saved in _your_ browser and
 nobody else's, and **Settings → Demo → Reset demo data** puts it back.
+**Settings → About** shows the exact commit the page was built from.
+
+Worth clicking, in this order:
+
+1. **Dashboard** — _Start Next_ picks the strongest backlog candidate in
+   each category, so one category can't crowd out the rest.
+2. **Goals** — six live daily-goal streaks, deliberately including a
+   stalled one and a half-finished day. A demo where everything is green
+   demonstrates nothing.
+3. **Discovery** — search and five filters over the whole backlog.
 
 The demo data is invented and checked into this repository — see
 [docs/DEMO_DATA.md](docs/DEMO_DATA.md) for the three independent barriers
 that keep real personal data out of it.
+
+Every push to `master` redeploys automatically, and only after the full
+test suite passes — see [Deployment](#deployment).
 
 ## Features
 
@@ -102,9 +115,14 @@ defended against. What's left is small and real, and got the attention:
   10 000-item resource caps.
 - **Logging that can't leak.** Records carry event names and scalars,
   never item content.
-- **CI gates.** `pnpm audit` at the `high` threshold plus `gitleaks` over
-  the full history — the audit gate caught a real advisory on its first
-  run and it was fixed rather than suppressed.
+- **CI gates.** `pnpm audit` at the `high` threshold plus `gitleaks`, on
+  every push and again weekly — an advisory can be published against a
+  dependency that hasn't changed. The audit gate caught a real advisory on
+  its first run and it was fixed rather than suppressed.
+- **Dependencies kept current.** Dependabot batches routine bumps into one
+  weekly PR and gives every major its own, so a breaking change can be
+  read in isolation. Vulnerability alerts and automated security fixes are
+  both on.
 - **No secrets anywhere,** because there is nothing to authenticate to.
   Deployment uses the workflow's built-in OIDC token.
 
@@ -126,8 +144,19 @@ _not_ tested, and why there's no coverage gate.
 ## Deployment
 
 GitHub Actions → GitHub Pages. Free, no credit card, no new account, and
-no secret to rotate. Pushing to `master` builds the demo bundle, publishes
-it, and then curls the live URL to confirm it answered.
+no secret to rotate — publishing authenticates with the workflow's
+built-in OIDC token.
+
+Pushing to `master` runs three jobs in sequence:
+
+| Job                          | What it does                                                                                                                                    |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Verify before publishing** | `pnpm verify` — typecheck, lint, format, 355 tests, build. Nothing gets past this.                                                              |
+| **Build the demo bundle**    | Builds with the project-page base path and the commit metadata, then asserts `404.html` was emitted — without it every deep link is a dead end. |
+| **Publish**                  | Deploys to Pages, then curls the live URL and greps for the app shell. A green deploy means the site actually answered.                         |
+
+`master` is protected: force-pushes and deletion are blocked, and both CI
+checks are required before any pull request can merge.
 
 **→ [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** — provider choice and the
 alternatives rejected, the SPA fallback, base-path handling, and a
@@ -135,17 +164,26 @@ troubleshooting table.
 
 ## Local development
 
+Requires **Node 22+** and **pnpm 11** (pinned via `packageManager`, so
+Corepack will fetch the right version).
+
 ```bash
 git clone https://github.com/AndreiBautin/Backlogs.git
 cd Backlogs
-pnpm install
+pnpm install        # also installs the pre-push hook — see Quality gates
 pnpm dev            # http://localhost:5173 — your own backlog, empty to start
 ```
 
-To run the app the way the public demo runs, seeded with sample data:
+That's the whole setup. No database to provision, no services to start, no
+environment file to create — the app has no backend, so there is nothing
+to configure before it runs.
+
+The two modes use **separate LocalStorage keys**, so you can run both
+without either touching the other's data:
 
 ```bash
-pnpm dev:demo       # separate storage keys; your real backlog is untouched
+pnpm dev            # personal — your own backlog
+pnpm dev:demo       # demo — seeded with the same 38 items the live site uses
 ```
 
 **Windows:** double-click [`start.bat`](start.bat) — it installs
@@ -224,8 +262,10 @@ documented portfolio project is packaged as a Claude Code skill:
 
 It's technology-agnostic — it inspects whatever stack it finds, assesses
 architecture and security, builds safe demo data, adds CI/CD, deploys to
-free no-credit-card infrastructure, verifies the result, and writes the
-interview guide. See
+free no-credit-card infrastructure, verifies the result against the live
+URL, and writes the interview guide. A final phase leaves the guardrails
+behind — enforced architecture rules, a gated deploy, a pre-push hook — so
+the repo stays at the bar instead of decaying back to a snapshot. See
 [`.claude/skills/portfolio-productionize/SKILL.md`](.claude/skills/portfolio-productionize/SKILL.md).
 
 ## License
