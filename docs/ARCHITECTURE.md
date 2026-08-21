@@ -1,208 +1,299 @@
 # Architecture
 
-Backlogs is built as four strictly layered concerns, inspired by Clean
-Architecture. Dependencies point inward only — outer layers know about inner
-ones, never the reverse.
+Backlogs is a **client-only React application**. There is no server, no
+database, and no network call anywhere in the codebase. That is a
+deliberate product decision, not a missing feature: the app's whole point
+is a private backlog you own, that works offline, that needs no account,
+and that nobody can shut down.
+
+Everything below follows from that one constraint.
+
+## The layers
+
+Four layers, with dependencies pointing **inward only**. Outer layers know
+about inner ones; the reverse never happens.
 
 ```
-domain  <—  application  <—  infrastructure
-   ^              ^
-   |              |
-   +—— features (presentation) ——+
-              |
-           shared / components
+                     ┌───────────────────────────────────┐
+                     │            features/              │  React pages,
+                     │  Dashboard · Discovery · Goals    │  components,
+                     │  Settings · Demo · NotFound       │  query hooks
+                     └────────────────┬──────────────────┘
+                                      │ calls use-cases through React context
+                     ┌────────────────▼──────────────────┐
+                     │           application/            │  one function
+                     │  createItem · listItems · …       │  per user intent
+                     │  seedDemoData · importItems       │  orchestration only
+                     └────────────────┬──────────────────┘
+                                      │ depends on domain types + ports
+                     ┌────────────────▼──────────────────┐
+                     │             domain/               │  pure TypeScript
+                     │  entities · value objects         │  no React,
+                     │  services · repository PORTS      │  no browser APIs,
+                     │  category/status/priority sets    │  no I/O
+                     └────────────────▲──────────────────┘
+                                      │ implements the ports
+                     ┌────────────────┴──────────────────┐
+                     │          infrastructure/          │  adapters
+                     │  LocalStorage repos · in-memory   │  the only code
+                     │  repos · serialization · seed     │  that knows about
+                     └───────────────────────────────────┘  window.localStorage
+
+           ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
+           │   config/    │   │   shared/    │   │     app/     │
+           │ environment  │   │ logging, DOM │   │ composition  │
+           │ → AppConfig  │   │ helpers      │   │ root, router │
+           └──────────────┘   └──────────────┘   └──────────────┘
 ```
 
-## domain/ — `src/domain`
+### `domain/` — the rules
 
-Pure TypeScript. No React, no browser APIs, no I/O. Fully unit-testable
-without mocks.
+Pure TypeScript. Imports nothing but itself. Every file here is testable
+by calling a function and comparing the result.
 
-- **entities/** — `Item`, plus `createItem`/`applyItemUpdate`/
-  `logDailyProgress` factory functions that own every business rule
-  (validation, default values, the auto-stamp-`dateStarted`/
-  `dateCompleted` rule); `DailyGoal`/`DailyProgressEntry` and their
-  local-calendar-day helpers in `daily-goal.ts`; `Settings`, plus
-  `applySettingsChanges`, validating each field the same way
-  `applyItemUpdate` does.
-- **value-objects/** — `ItemId`, a branded string with a `createItemId()`
-  generator.
-- **categories/** — `CATEGORY_REGISTRY`, the single extension point for
-  content categories. Adding a category is a one-line addition to this
-  array; `CategoryId` is derived from it (`(typeof CATEGORY_REGISTRY)[number]['id']`),
-  so the type and the data can never drift apart. No domain service or
-  use-case ever branches on a specific category.
-- **status/**, **priority/**, **theme/** — closed value sets with label
-  maps and (for priority) rank ordering, each with a runtime type guard.
-- **sorting/** — `SortKey`, following the same closed-value-set pattern.
-- **services/** — pure functions over `Item[]`:
-  `getDashboardSections` (Continue / Start Next / Recently Finished /
-  Recently Added), `getCompletionStats` (backlog size, completions,
-  completion %, items-by-category), `filterItems`/`sortItems` (Discovery's
-  search/filter/sort), `getGoalsStats` (streak, completion averages,
-  backlog age, oldest unfinished item — reuses `getCompletionStats`
-  internally rather than duplicating its logic), `getDailyGoalBoard`
-  (today's per-item check-in: what's logged, what's met, and the streak
-  behind each), and `item-envelope`
-  (`createItemEnvelope`/`parseItemEnvelope`, the shared `{ version, items }`
-  shape used by both the LocalStorage adapter and Import/Export —
-  `parseItemEnvelope` never throws and reports `envelopeValid` separately
-  from `warning`, so callers can tell "nothing usable was found" apart
-  from "a legitimately empty envelope").
-- **repositories/** — `ItemRepository` and `SettingsRepository`, both
-  ports (interfaces only). Every method returns a `Promise`, even though
-  the current adapters are synchronous under the hood — this is what lets
-  a future network/SQLite backend slot in without changing a single call
-  site.
-- **errors/** — `DomainValidationError`.
+- **entities/** — `Item`, `Settings`, `DailyGoal`. These are not anaemic
+  data bags: `createItem`, `applyItemUpdate`, and `logDailyProgress` own
+  the actual rules, including validation and the transition that stamps
+  `dateStarted` the first time something becomes _currently using_ and
+  `dateCompleted` the first time it becomes _completed_.
+- **value-objects/** — `ItemId`, a branded string.
+- **categories/**, **status/**, **priority/**, **theme/**, **sorting/** —
+  closed value sets, each with a runtime type guard. `CategoryId` is
+  _derived_ from the registry array (`(typeof CATEGORY_REGISTRY)[number]['id']`),
+  so the type and the data cannot drift apart. Adding a category is a
+  one-line addition to one array.
+- **services/** — pure functions over `Item[]`: `getDashboardSections`,
+  `getCompletionStats`, `filterItems` / `sortItems`, `getGoalsStats`,
+  `getDailyGoalBoard`, and `item-envelope` (the shared `{ version, items }`
+  shape used by both LocalStorage and the export file).
+- **repositories/** — `ItemRepository` and `SettingsRepository`. These are
+  **interfaces only** — ports. Every method returns a `Promise` even
+  though today's adapters are synchronous, which is what lets a network
+  or SQLite backend slot in later without touching a single call site.
 
-## application/ — `src/application`
+### `application/` — the intents
 
-Use-cases orchestrate domain logic against a repository port. No framework
-code, no concrete storage details. Each is a factory function —
-`createXUseCase(repository) => (...) => Promise<...>` — so tests inject an
-`InMemoryItemRepository`/`InMemorySettingsRepository` and never touch real
-storage or mocks.
+One file per thing a user can do: `createItem`, `updateItem`,
+`deleteItem`, `listItems`, `getDashboardData`, `getGoalsData`,
+`getDailyGoals`, `logDailyProgress`, `exportItems`, `importItems`,
+`getSettings`, `updateSettings`, `seedDemoData`, `resetDemoData`.
 
-- **use-cases/items/** — `createItem`, `updateItem` (throws
-  `ItemNotFoundError` for an unknown id), `deleteItem`, `listItems`
-  (accepts optional `{ filters, sortKey }`, composing `filterItems`/
-  `sortItems` over the repository's full snapshot), `exportItems`
-  (serializes the full backlog via `createItemEnvelope`), `importItems`
-  (parses via `parseItemEnvelope` and only calls `replaceAll` when
-  `envelopeValid` is true — garbage input leaves the existing backlog
-  untouched instead of wiping it).
-- **use-cases/dashboard/** — `getDashboardData`, which composes both domain
-  stats services into one payload for the presentation layer.
-- **use-cases/goals/** — `getGoalsData`, wrapping `getGoalsStats`;
-  `getDailyGoals`, wrapping `getDailyGoalBoard`; and `logDailyProgress`,
-  which records a day's progress (throwing `ItemNotFoundError` for an
-  unknown id, and letting the domain refuse an item with no goal). Kept
-  out of `updateItem` because the domain treats logging as appending to a
-  log, not editing a field.
-- **use-cases/settings/** — `getSettings`, `updateSettings` (validated
-  merge via `applySettingsChanges`).
-- **errors/** — `ItemNotFoundError`.
+Each is a **factory that takes its dependencies and returns a function**:
 
-## infrastructure/ — `src/infrastructure`
+```ts
+export function createUpdateItemUseCase(repository: ItemRepository): UpdateItemUseCase {
+  return async (id, changes) => {
+    const existing = await repository.getById(id)
+    if (!existing) throw new ItemNotFoundError(id)
+    const updated = applyItemUpdate(existing, changes) // ← the rule lives in domain
+    await repository.save(updated)
+    return updated
+  }
+}
+```
 
-Adapters that implement domain ports. This is the _only_ layer allowed to
-touch `window.localStorage`.
+Use-cases **orchestrate**; they do not decide. Notice that the update rule
+itself is `applyItemUpdate`, a pure domain function. The use-case's job is
+load → apply → save.
 
-- **storage/local-storage-item-repository.ts** — the real `ItemRepository`.
-  Persists a versioned JSON envelope (`{ version, items }`) under
-  `backlogs:items:v1`.
-- **storage/serialization.ts** — a thin wrapper around the domain's
-  `item-envelope` module, translating its `{ items, warning }` result into
-  a `console.warn` and a plain `Item[]` for this specific storage key.
-- **storage/local-storage-settings-repository.ts** — the real
-  `SettingsRepository`, under `backlogs:settings:v1`. Recovers to
-  `DEFAULT_SETTINGS` on any corruption by reusing `applySettingsChanges`
-  for validation (a bad field throws, caught and treated as "start over
-  from defaults") rather than a separate duplicated type guard.
-- **storage/in-memory-item-repository.ts**,
-  **storage/in-memory-settings-repository.ts** — the test doubles used
-  everywhere above this layer instead of real storage.
-- **storage/item-repository.contract.ts**,
-  **storage/settings-repository.contract.ts** — shared Vitest suites that
-  both adapters of each repository are run against, so they stay
-  behaviorally interchangeable, not just type-compatible.
+Anything a use-case needs from the outside world is a parameter. The demo
+seed is the clearest example: `createSeedDemoDataUseCase(repository,
+createDemoItems)` takes the _fixture factory_ as an argument rather than
+importing it, because the fixture lives in `infrastructure/` and
+application code must never point outward.
 
-## app/ — `src/app` (composition root)
+### `infrastructure/` — the adapters
 
-The one place that wires concrete infrastructure into the rest of the app.
+The only code in the app that knows `window.localStorage` exists.
 
-- **di.ts** — `createAppUseCases(itemRepository?, settingsRepository?)`
-  constructs `LocalStorageItemRepository`/`LocalStorageSettingsRepository`
-  by default and wires every use-case to them. Swapping storage later
-  means changing these two default arguments.
-- **use-cases-context.ts** / **providers.tsx** — expose the use-cases to
-  React via context (`AppProviders`), alongside a `QueryClient`.
-- **router.tsx** — route table (`react-router-dom`).
-- **layout/AppShell.tsx** — sidebar nav, the "New" button, the theme sync
-  (`useApplyTheme`), and the two globally-mounted overlays
-  (`QuickCaptureModal`, `ItemDetailDrawer`).
+- `LocalStorageItemRepository` / `LocalStorageSettingsRepository` — the
+  real adapters, taking their storage key and logger as constructor
+  options so the demo build can point at a different namespace.
+- `InMemoryItemRepository` / `InMemorySettingsRepository` — test doubles.
+- `item-repository.contract.ts` / `settings-repository.contract.ts` — a
+  shared test suite that runs against **both** implementations. This is
+  what makes the in-memory fake trustworthy: it is not "close enough" to
+  the real thing, it is proven to satisfy the same contract.
+- `seed/demo-backlog.ts` — the demo fixture, a pure
+  `(now: Date) => Item[]`.
 
-TanStack Query wraps every use-case call (`src/features/*/hooks`) even
-though LocalStorage resolves instantly — this is the deliberate
-future-proofing seam the spec calls for. Swapping in a real network API
-later changes query functions, not components.
+### `features/` — the screens
 
-Zustand (`src/features/items/store/use-item-ui-store.ts`) holds only
-ephemeral UI state — which modal is open, which item is selected. It is
-never the source of truth for persisted data; that always flows through
-`AppUseCases`.
+Each feature owns its page, its components, and its query hooks.
+Components never touch a repository; they call use-cases obtained from
+React context via `useUseCases()`, and TanStack Query handles caching and
+invalidation.
 
-## features/ — `src/features` (presentation, feature-first)
+Local UI state that is genuinely UI state — "is the quick-capture modal
+open", "which item is selected" — lives in a small Zustand store
+(`use-item-ui-store`), deliberately separate from server-ish state.
 
-- **dashboard/** — `DashboardPage`, `QuickStats`, `useDashboardDataQuery`.
-  Opens with the compact "Today" daily check-in, which hides itself
-  entirely when nothing is in progress (nothing to nag about yet).
-- **items/** — `QuickCaptureModal` (an outer shell + inner
-  `QuickCaptureForm` that only mounts while the dialog is open, so every
-  open gets fresh state seeded from the current settings' default
-  category/status — no effect needed to sync state to data that loads
-  after the component does), `ItemDetailDrawer`, `ItemCard`,
-  `StatusBadge`, `PriorityBadge`, the item-UI Zustand store, and the
-  TanStack Query hooks (`useItemsQuery`, `useCreateItemMutation`,
-  `useUpdateItemMutation`, `useExportItemsMutation`,
-  `useImportItemsMutation`).
-- **discovery/** — `DiscoveryPage`: search, category/status/priority/
-  platform/tag filters, sort control seeded from `defaultSort` (same
-  "gate on the settings load, then mount with props-derived initial
-  state" pattern as Quick Capture).
-- **goals/** — `GoalsPage`, `useGoalsDataQuery`: streak, completion
-  averages, backlog age, oldest unfinished item. Also owns the daily
-  check-in, which spans two pages: `DailyGoalsPanel` (query + mutation +
-  summary), `DailyGoalRow` (one item's goal, count, and +1/undo controls)
-  and `DailyGoalHistory` (the 14-day strip), with `useDailyGoalsQuery`/
-  `useLogDailyProgressMutation`. `DashboardPage` renders the same panel
-  compactly; the Goals page passes `showHistory`. One component, two
-  densities — rather than a second implementation on the Dashboard.
-  A goal itself is set on the item, in `ItemDetailDrawer`, seeded from
-  the category's `suggestedGoalUnit`.
-- **settings/** — `SettingsPage`: theme/default-sort/default-category/
-  default-status pickers (auto-save per field) and Backup/Restore
-  (Export downloads a JSON file; Import confirms before replacing the
-  backlog, then reports the imported item count and any warning).
-  `useApplyTheme` toggles `<html>`'s `dark` class from the persisted
-  theme.
+### The supporting three
 
-Components stay thin: hooks call use-cases, domain services do the
-decision-making, components render the result. No business logic lives in
-a `.tsx` file.
+- **`config/`** — `readAppConfig(env)` turns raw environment variables
+  into a validated `AppConfig`. Pure and total: any input produces a
+  usable config, with problems reported as `warnings` rather than thrown.
+  `getStorageKeys(mode)` maps the mode onto LocalStorage namespaces.
+- **`shared/logging/`** — a structured `Logger`. Records carry an event
+  name and a flat bag of scalars, never item content.
+- **`app/`** — the composition root: `di.ts` (the one file that names a
+  concrete repository), the React context providers, the router, and the
+  error boundary.
 
-## shared/ and components/
+## How a request flows
 
-- **shared/hooks/use-keyboard-shortcut.ts** — a generic single-key
-  shortcut hook (ignores modifier combos and typing targets). Lives here
-  rather than under `features/items` because it has zero domain knowledge;
-  `QuickCaptureModal` is simply its first caller (`N` opens Quick Capture).
-- **shared/download-text-file.ts** — the only place that touches
-  `Blob`/`URL.createObjectURL`/an anchor's `download` attribute. A pure
-  browser-DOM concern with no business logic, so it isn't domain- or
-  application-layer code — `SettingsPage` is its only caller today.
-- **components/ui/** — shadcn/ui primitives (Button, Dialog, Sheet, Select,
-  etc.).
-- **components/shared/** — small generic presentational pieces used across
-  features, e.g. `EmptyState`, `StatTile` (shared by Dashboard's
-  `QuickStats` and Goals).
+There is no server, so "request" means one user action end to end. Take
+**checking off a daily goal on the Goals page**:
 
-## Why this shape
+```
+1.  User clicks "+1" on the Baldur's Gate 3 row
+        │
+2.  DailyGoalRow calls useLogDailyProgressMutation().mutate({ id })
+    features/goals/hooks/use-daily-goals.ts
+        │
+3.  The hook resolves the use-case from React context
+    useUseCases().logDailyProgress   ← injected, never imported
+        │
+4.  application/use-cases/goals/log-daily-progress.ts
+        a. repository.getById(id)          → load
+        b. logDailyProgress(item, { })     → apply the RULE (domain)
+        c. repository.save(updated)        → persist
+        │
+5.  domain/entities/item.ts :: logDailyProgress
+        - throws DomainValidationError if the item has no goal
+        - appends to the progress log via applyProgressDelta, which keeps
+          it sorted and sparse (a day drops out when it returns to zero)
+        - stamps lastUpdated
+        │
+6.  infrastructure/storage/local-storage-item-repository.ts
+        - serializeItems → { version: 1, items: [...] }
+        - storage.setItem('backlogs:items:v1', json)
+        - a QuotaExceededError becomes a message the UI can show
+        │
+7.  onSuccess → queryClient.invalidateQueries for items, dashboard,
+    goals, and daily-goals
+        │
+8.  Every affected query refetches through its use-case; the row, the
+    streak count, the "3 of 6 done" header, and the dashboard all update
+```
 
-- **Testability without mocks.** Domain services are pure functions;
-  use-cases are tested against in-memory fakes; only the repository
-  adapters touch anything resembling I/O, and each pair (item/settings) is
-  covered by its own shared contract suite.
-- **Replaceable storage.** `ItemRepository`/`SettingsRepository` are the
-  only seams infrastructure is allowed to leak through. A SQLite or REST
-  adapter is a new file in `infrastructure/storage/`, a one-line change in
-  `app/di.ts`, and nothing else moves.
-- **Category extensibility without core-logic changes.** New categories are
-  additive data (`CATEGORY_REGISTRY`), never a new `switch` branch in a
-  service or use-case.
-- **No duplicated validation.** `applySettingsChanges` is reused both by
-  the `updateSettings` use-case and by `LocalStorageSettingsRepository`'s
-  corruption recovery; `item-envelope`'s validation is reused by both the
-  LocalStorage adapter and Import/Export. One rule, enforced once, used
-  everywhere it's needed.
+The important property: **step 5 is the only place the rule lives.** The
+component does not know what a streak is, and the repository does not know
+what a goal is.
+
+## Where things live
+
+| Question                            | Answer                                                        |
+| ----------------------------------- | ------------------------------------------------------------- |
+| Where is business logic?            | `domain/` — entities and services, all pure functions.        |
+| Where is orchestration?             | `application/` — load, apply, save.                           |
+| Where does persistence happen?      | `infrastructure/` — the only place that names `localStorage`. |
+| How do dependencies flow?           | Inward. `app/di.ts` is the single composition root.           |
+| How is auth handled?                | There is none, by design — see below.                         |
+| How are errors handled?             | Three tiers — see below.                                      |
+| Where does configuration come from? | `config/app-config.ts`, read from `import.meta.env`.          |
+
+## Authentication and authorization
+
+**There is none, and that is the correct design.**
+
+There is no server, no account, and no shared storage. Every user's data
+is confined to their own browser origin by the same-origin policy — the
+browser is the authorization boundary, and it is a stronger one than most
+applications implement themselves. Adding a login would mean adding a
+server, which would mean the app stopped working offline and started
+requiring trust in someone else's infrastructure. That trade is the exact
+opposite of what this app is for.
+
+The public demo needs no credentials for the same reason: there is
+nothing to log into. A visitor gets a seeded backlog in their own browser
+and can do anything they like to it.
+
+## Error handling
+
+Three tiers, each with a different job:
+
+1. **Domain validation** — `DomainValidationError`, thrown by entity
+   functions when a rule is violated ("Title is required", "Unknown
+   category: …"). Surfaces as inline form feedback.
+2. **Corrupt or hostile input** — `parseItemEnvelope` **never throws**. It
+   returns `{ items, warning, droppedCount, envelopeValid }`. The
+   `envelopeValid` flag is what lets `importItems` distinguish "this file
+   is not a backup" from "this backup is legitimately empty", so a bad
+   file can never silently erase a backlog.
+3. **Anything unexpected** — the `ErrorBoundary` catches render-time
+   failures and shows a recoverable screen with a reload button. It shows
+   the error text only outside production, because an error message can
+   quote the item that caused it.
+
+Storage write failures (a full quota, Safari private mode) are caught in
+the repository, logged as an event, and rethrown as a plain message the UI
+can display, with the original attached as `cause`.
+
+## Configuration and secrets
+
+**There are no secrets.** No API key, no token, no connection string —
+there is nothing to authenticate to. Anything under a `VITE_` prefix is
+compiled into the bundle and therefore public by definition, and
+`.env.example` says so explicitly.
+
+Configuration is environment-driven and read once at startup:
+
+| Variable                                                 | Purpose                                   |
+| -------------------------------------------------------- | ----------------------------------------- |
+| `VITE_APP_MODE`                                          | `personal` (default) or `demo`            |
+| `VITE_LOG_LEVEL`                                         | Console verbosity floor                   |
+| `VITE_BASE_PATH`                                         | Path the app is served under              |
+| `VITE_APP_VERSION` / `VITE_COMMIT_SHA` / `VITE_BUILT_AT` | Build metadata, shown in Settings → About |
+
+`AppConfig` reaches components through `AppConfigContext`, not through a
+module import, so a test can render the demo experience by passing a demo
+config — no environment stubbing.
+
+## Observability
+
+Proportionate to a static, serverless portfolio app:
+
+- **Structured logging.** Events like `app.start`, `storage.items.corrupted`,
+  `ui.render-failed` carry scalar context and never item content, so the
+  logger is safe to leave enabled in production (where it is thresholded
+  to `warn`).
+- **Build identification.** Settings → About shows the version and commit
+  the running bundle was built from, so a report about the deployed site
+  can be tied to a specific commit.
+- **Deploy verification.** The deploy workflow curls the published URL and
+  greps for the app shell, so a green deploy means the site answered.
+- **Platform logs.** GitHub Actions run logs are the CI/CD observability,
+  and they are free.
+
+There is deliberately no error-reporting SaaS, no analytics, and no
+metrics pipeline. All three would mean sending someone's private reading
+habits to a third party in exchange for information this app does not need.
+
+## Why this architecture
+
+It is more structure than a to-do app usually gets, and the justification
+is specific rather than aesthetic:
+
+- **The domain genuinely has rules.** Streaks with a grace day, local
+  calendar-day arithmetic that survives daylight saving, priority-then-age
+  ranking, per-category backlog picks. Those are worth isolating and
+  testing directly — and they are, with no mocks anywhere.
+- **The persistence layer is expected to change.** LocalStorage was the
+  right first choice and is not the last one. The port/adapter split means
+  that change is one file.
+- **It makes the UI testable.** Because `di.ts` is the only place naming a
+  concrete repository, every page test runs against in-memory storage.
+  That is why 346 tests run in under thirty seconds.
+
+What it deliberately is **not**: there is no CQRS, no event sourcing, no
+mediator, no repository-per-entity ceremony, and no dependency-injection
+container. Use-cases are closures over their dependencies, which is all
+the injection this app needs.
+
+## Related reading
+
+- [Domain model](DOMAIN_MODEL.md) — the entities in detail.
+- [Security](SECURITY.md) — the threat model this shape produces.
+- [Testing](TESTING.md) — what is tested at each layer.
+- [Deployment](DEPLOYMENT.md) — how the static bundle reaches the web.

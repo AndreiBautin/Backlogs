@@ -1,0 +1,8 @@
+# pnpm 11 moved `overrides` out of package.json and into this file.
+overrides:
+  # GHSA-2v37-7h3g-55p8 — a custom generator can loop indefinitely when
+  # size is zero. Reaches us only through postcss <- vite, so it is a
+  # build-time dependency we never call with a custom generator. Pinned
+  # forward anyway rather than lowering the CI audit threshold: the gate
+  # is worth more than the convenience of ignoring it.
+  nanoid@<3.3.18: '^3.3.18'
