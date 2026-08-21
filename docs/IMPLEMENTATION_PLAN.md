@@ -1,5 +1,11 @@
 # Implementation Plan
 
+> **Historical.** A record of how the four feature milestones were built,
+> one vertical slice at a time. The test counts below are the totals at
+> each milestone, not the current ones. The productionization pass that
+> followed is documented in
+> [PRODUCTIONIZATION_ASSESSMENT.md](PRODUCTIONIZATION_ASSESSMENT.md).
+
 ## Milestone 1 — Foundation + first vertical slice (done)
 
 Everything below shipped as one commit per step, each a working,

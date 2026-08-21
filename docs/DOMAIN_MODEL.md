@@ -202,7 +202,7 @@ interface ItemEnvelope {
 `createItemEnvelope(items)` / `parseItemEnvelope(raw)`
 (`src/domain/services/item-envelope.ts`) are the one place that defines
 "what a serialized list of items looks like." `parseItemEnvelope` never
-throws; it returns `{ items, warning, envelopeValid }`:
+throws; it returns `{ items, warning, droppedCount, envelopeValid }`:
 
 - `envelopeValid: false` — `raw` wasn't recognizable as an envelope at all
   (invalid JSON, or valid JSON missing the `{ version, items[] }` shape).
@@ -218,6 +218,25 @@ untouched, while a genuinely empty backup still replaces it as expected.
 `LocalStorageItemRepository`'s serialization and the user-facing
 Export/Import feature both build on this one module rather than each
 re-implementing "is this a plausible `Item`."
+
+It is also the app's **trust boundary**. Both of its inputs — a restored
+backup file and LocalStorage itself — come from outside the app, so it
+does more than shape-checking:
+
+- **Closed value sets are checked against their registries.** A
+  `category` of `"not-a-category"` is well-formed JSON but would reach
+  `getCategoryDefinition`, which throws. Validating here is what lets
+  every layer above treat `CategoryId` as the guarantee its type claims.
+- **Resource limits.** 5 MB of input, checked before parsing, and 10 000
+  items, checked after.
+- **Prototype-polluting keys** (`__proto__`, `constructor`, `prototype`)
+  are stripped during normalization, because `JSON.parse` preserves them
+  as own properties and the normalizer spreads the object onward.
+
+Rejected items are **dropped rather than repaired** — silently rewriting
+someone's data is worse than declining to load one row — and
+`droppedCount` reports how many, which is safe to log when the items
+themselves are not.
 
 Every item that survives the plausibility check is then **normalized**:
 a missing `dailyProgress` becomes `[]`, and a malformed `dailyGoal` or log

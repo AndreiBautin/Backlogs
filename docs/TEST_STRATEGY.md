@@ -1,5 +1,10 @@
 # Test Strategy
 
+> **Historical.** This records the TDD discipline the app was built with,
+> and its counts are as of the daily-goals feature. For the current suite —
+> including the productionization tests and what is deliberately left
+> untested — see [TESTING.md](TESTING.md).
+
 Tests are colocated with source (`x.ts` + `x.test.ts`, `X.tsx` + `X.test.tsx`)
 using Vitest, `jsdom`, and React Testing Library. As of the daily-goals
 feature: **257 tests across 42 files, all layers, zero skipped.**
