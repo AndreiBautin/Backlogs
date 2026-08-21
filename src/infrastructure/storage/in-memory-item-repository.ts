@@ -4,7 +4,12 @@ import type { ItemId } from '@/domain/value-objects/item-id'
 
 /** In-process test double for ItemRepository — no I/O, used across application-layer tests. */
 export class InMemoryItemRepository implements ItemRepository {
-  private items = new Map<ItemId, Item>()
+  private items: Map<ItemId, Item>
+
+  /** Optionally pre-seeded, so a test can state its starting world in one line. */
+  constructor(initial: readonly Item[] = []) {
+    this.items = new Map(initial.map((item) => [item.id, item]))
+  }
 
   getAll(): Promise<Item[]> {
     return Promise.resolve([...this.items.values()])
