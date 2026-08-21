@@ -1,6 +1,6 @@
 # Testing
 
-**346 tests across 51 files, running in about 25 seconds.** Coverage of
+**355 tests across 52 files, running in about 25 seconds.** Coverage of
 `domain/`, `application/`, and `infrastructure/` sits at **97.6% of
 statements and 100% of functions** — but that number is a diagnostic, not
 a target, and nothing in CI enforces it.

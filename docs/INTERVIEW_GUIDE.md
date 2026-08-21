@@ -18,7 +18,7 @@ aspirational, and no technology is claimed that is not in the repository.
 >
 > The interesting part is that it's built in layers, with the business
 > rules — streaks, ranking, date arithmetic — isolated as pure functions
-> with no React in them. That's why there are 346 tests that run in
+> with no React in them. That's why there are 355 tests that run in
 > twenty-five seconds with no mocking library anywhere.
 
 **If they ask "why no backend?"** — because the app's defining feature is
@@ -113,7 +113,7 @@ Each is a decision you made, with what you turned down and what it cost.
 
 - **Alternatives:** components calling `localStorage` directly (typical
   for an app this size); a single service module.
-- **Why:** the domain has real rules worth isolating, and 346 tests run
+- **Why:** the domain has real rules worth isolating, and 355 tests run
   fast with no mocking precisely because the rules are pure functions and
   storage is swappable.
 - **Trade-off:** more files, and one extra hop to trace a feature. Worth
@@ -386,7 +386,7 @@ value public and must never hold a credential.
 
 ## Testing
 
-**346 tests, 51 files, ~25 seconds. No mocking library anywhere.**
+**355 tests, 52 files, ~25 seconds. No mocking library anywhere.**
 
 Say why that last part is possible, because it is the strongest signal:
 
@@ -455,7 +455,7 @@ over-engineered for a to-do app?"**
 > — streaks with a grace day, calendar arithmetic that survives DST,
 > priority-then-age ranking, one backlog pick per category — and those are
 > the things you want as pure functions you can test directly. The proof
-> is the test suite: 346 tests in 25 seconds with no mocking. You don't
+> is the test suite: 355 tests in 25 seconds with no mocking. You don't
 > get that shape from components calling `localStorage`.
 
 **"How would you add multi-device sync?"**

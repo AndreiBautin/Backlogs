@@ -21,8 +21,43 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The gate. Nothing reaches the live demo without passing the same
+  # checks a pull request has to pass.
+  #
+  # This deliberately re-runs what ci.yml already ran, rather than chaining
+  # off it with `workflow_run`. The chained version avoids ~60s of
+  # duplicated work but pays for it in complexity — resolving the right
+  # commit to check out, filtering on the upstream conclusion, and the rule
+  # that workflow_run only fires from the default branch. Actions minutes
+  # are free on a public repository; a deploy pipeline you can read top to
+  # bottom is worth more than the minutes.
+  verify:
+    name: Verify before publishing
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # typecheck + lint + format:check + test:run + build — the same
+      # single command a developer runs locally, and the same one the
+      # pre-push hook runs.
+      - name: Verify
+        run: pnpm verify
+
   build:
     name: Build the demo bundle
+    needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 10
 

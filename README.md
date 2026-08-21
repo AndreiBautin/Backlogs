@@ -83,7 +83,7 @@ traced end to end, error handling, and why this shape is justified here.
 | **TanStack Query 5**                | Caching and coordinated invalidation. Reads are async even against LocalStorage, and one check-in invalidates four query keys.                                                                                      |
 | **Zustand**                         | Only for genuinely ephemeral UI state — "is the modal open". Kept deliberately separate from data.                                                                                                                  |
 | **Tailwind v4 + shadcn/ui (Radix)** | Accessible primitives without a component library's opinions.                                                                                                                                                       |
-| **Vitest + React Testing Library**  | 346 tests in ~25 seconds.                                                                                                                                                                                           |
+| **Vitest + React Testing Library**  | 355 tests in ~25 seconds.                                                                                                                                                                                           |
 | **LocalStorage**                    | Zero setup, works offline, no account. Behind a repository interface whose methods all return Promises — so swapping in IndexedDB or an API is one file.                                                            |
 
 ## Security
@@ -113,7 +113,7 @@ finding and its fix, and the remaining risks stated plainly.
 
 ## Testing
 
-**346 tests across 51 files, ~25 seconds, no mocking library anywhere** —
+**355 tests across 52 files, ~25 seconds, no mocking library anywhere** —
 possible because `domain/` is pure functions and everything else takes its
 dependencies as parameters. Priority goes to business rules, the trust
 boundary, destructive operations, and whole user workflows. The repository

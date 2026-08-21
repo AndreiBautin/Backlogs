@@ -284,7 +284,7 @@ is specific rather than aesthetic:
   that change is one file.
 - **It makes the UI testable.** Because `di.ts` is the only place naming a
   concrete repository, every page test runs against in-memory storage.
-  That is why 346 tests run in under thirty seconds.
+  That is why 355 tests run in under thirty seconds.
 
 What it deliberately is **not**: there is no CQRS, no event sourcing, no
 mediator, no repository-per-entity ceremony, and no dependency-injection

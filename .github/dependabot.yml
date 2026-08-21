@@ -1,0 +1,41 @@
+# Keeps dependencies current so the CI audit gate does not slowly rot into
+# a permanent red light. Every PR here is proved by the full pipeline
+# before it can be merged, and the deploy is gated on the same checks.
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps-dev)'
+    groups:
+      # One PR a week for the safe bumps, rather than fifteen. Majors are
+      # excluded so a breaking change always arrives on its own, where it
+      # can be read and tested in isolation.
+      minor-and-patch:
+        patterns: ['*']
+        update-types: ['minor', 'patch']
+    ignore:
+      # Majors still get their own PR — this only keeps them out of the
+      # grouped one above.
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+
+  # The workflow files pin action versions too, and those go stale in the
+  # same way. This is what would have caught the Node 20 deprecation
+  # warnings currently showing on every run.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'chore(ci)'
+    groups:
+      actions:
+        patterns: ['*']
