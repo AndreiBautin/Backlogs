@@ -106,8 +106,16 @@ specifically that item titles never appear in log output.
 
 ### S6 · No dependency scanning — _fixed_
 
-**Fix.** CI runs `pnpm audit --audit-level high` on every push and pull
-request, plus `gitleaks` across the full git history.
+**Fix.** CI runs `pnpm audit --audit-level high` plus `gitleaks` on every
+push and pull request, and again on a weekly schedule — an advisory can be
+published against a dependency that has not changed, and without the
+schedule it would only surface the next time someone happened to push.
+
+On a push, gitleaks scans the pushed commits; on the weekly run and on
+manual dispatch it scans the entire history. The checkout uses
+`fetch-depth: 0`, because the default shallow clone leaves gitleaks with a
+commit range it cannot resolve — which fails the step without having
+scanned anything, a false alarm worse than no scan.
 
 This gate immediately proved its worth: the first run failed on
 [GHSA-2v37-7h3g-55p8](https://github.com/advisories/GHSA-2v37-7h3g-55p8)
@@ -254,13 +262,13 @@ portfolio app whose source is public anyway, that trade is backwards.
 
 ## Dependency and security scanning in CI
 
-| Check                 | Tool                                                                             | Threshold                 |
-| --------------------- | -------------------------------------------------------------------------------- | ------------------------- |
-| Known vulnerabilities | `pnpm audit`                                                                     | Fails on `high` and above |
-| Committed secrets     | `gitleaks-action@v2`                                                             | Fails on any finding      |
-| Lockfile drift        | `pnpm install --frozen-lockfile`                                                 | Fails on any drift        |
-| Type safety           | `tsc -b` with `strict`, `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess` | Fails on any error        |
-| Lint                  | `typescript-eslint` `strictTypeChecked`                                          | Fails on any error        |
+| Check                 | Tool                                                                             | Threshold                                 |
+| --------------------- | -------------------------------------------------------------------------------- | ----------------------------------------- |
+| Known vulnerabilities | `pnpm audit`                                                                     | Fails on `high` and above                 |
+| Committed secrets     | `gitleaks-action@v2`                                                             | Fails on any finding; full history weekly |
+| Lockfile drift        | `pnpm install --frozen-lockfile`                                                 | Fails on any drift                        |
+| Type safety           | `tsc -b` with `strict`, `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess` | Fails on any error                        |
+| Lint                  | `typescript-eslint` `strictTypeChecked`                                          | Fails on any error                        |
 
 `gitleaks-action` requires no licence key for repositories under a
 personal account, which is the case here.

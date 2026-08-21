@@ -4,8 +4,13 @@ on:
   push:
     branches: [master]
   pull_request:
+  # A weekly run catches an advisory published against a dependency that
+  # has not changed. Without it, a vulnerability only surfaces the next
+  # time someone happens to push.
+  schedule:
+    - cron: '0 6 * * 1'
   # Lets the security job be re-run on demand after an advisory lands,
-  # without needing a code change to trigger it.
+  # without waiting for the weekly run.
   workflow_dispatch:
 
 concurrency:
@@ -59,12 +64,18 @@ jobs:
         run: pnpm build:demo
 
   security:
-    name: Dependency audit
+    name: Dependency audit and secret scan
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          # gitleaks needs real history. The default shallow clone leaves it
+          # with a commit range it cannot resolve, which fails the step
+          # without having scanned anything — a false alarm that is worse
+          # than no scan, because it trains you to ignore the job.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
@@ -83,8 +94,10 @@ jobs:
         run: pnpm audit --audit-level high
 
       # Catches a credential committed by accident. This app has never had
-      # one, and the check is here to keep it that way.
-      - name: Scan the full history for secrets
+      # one, and the check is here to keep it that way. On a push this
+      # scans the pushed commits; on the weekly schedule and on manual
+      # dispatch it scans the entire history.
+      - name: Scan for committed secrets
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
