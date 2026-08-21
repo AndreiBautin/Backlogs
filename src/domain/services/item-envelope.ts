@@ -1,7 +1,28 @@
+import { isCategoryId } from '../categories/category-registry'
 import { isPlausibleDailyGoal, isPlausibleProgressEntry } from '../entities/daily-goal'
 import type { Item } from '../entities/item'
+import { isPriority } from '../priority/priority'
+import { isStatus } from '../status/status'
 
 export const ITEM_ENVELOPE_VERSION = 1
+
+/**
+ * Resource limits on anything parsed from outside the app — a restored
+ * backup file, or LocalStorage a user could have hand-edited. Neither
+ * source is trusted, and a browser tab has no other backstop: without a
+ * cap, a 500 MB file is a frozen tab rather than an error message.
+ */
+export const MAX_ENVELOPE_BYTES = 5 * 1024 * 1024
+export const MAX_ENVELOPE_ITEMS = 10_000
+
+/**
+ * Keys that let a crafted JSON payload reach `Object.prototype` when the
+ * parsed object is later spread or assigned. `JSON.parse` keeps them as
+ * own properties rather than acting on them, so they are harmless until
+ * something copies them onward — which `normalizeItem` does. Stripping
+ * them here means nothing downstream has to remember to.
+ */
+const POLLUTING_KEYS = ['__proto__', 'constructor', 'prototype'] as const
 
 export interface ItemEnvelope {
   readonly version: number
@@ -23,6 +44,15 @@ function isEnvelopeShape(value: unknown): value is RawEnvelopeShape {
   )
 }
 
+/**
+ * Whether a parsed value is close enough to an `Item` to keep.
+ *
+ * The closed-value-set fields are checked against their registries, not
+ * merely `typeof === 'string'`: a `category` of `"not-a-category"` is
+ * well-typed JSON but would reach `getCategoryDefinition`, which throws.
+ * Validating at the boundary is what lets every layer above it treat
+ * `CategoryId` as the guarantee its type claims to be.
+ */
 export function isPlausibleItem(value: unknown): value is Item {
   if (typeof value !== 'object' || value === null) {
     return false
@@ -30,11 +60,16 @@ export function isPlausibleItem(value: unknown): value is Item {
   const candidate = value as Partial<Record<keyof Item, unknown>>
   return (
     typeof candidate.id === 'string' &&
+    candidate.id.length > 0 &&
     typeof candidate.title === 'string' &&
     typeof candidate.category === 'string' &&
+    isCategoryId(candidate.category) &&
     typeof candidate.status === 'string' &&
+    isStatus(candidate.status) &&
     typeof candidate.priority === 'string' &&
+    isPriority(candidate.priority) &&
     Array.isArray(candidate.tags) &&
+    candidate.tags.every((tag) => typeof tag === 'string') &&
     typeof candidate.favorite === 'boolean' &&
     typeof candidate.dateAdded === 'string' &&
     typeof candidate.lastUpdated === 'string'
@@ -42,11 +77,13 @@ export function isPlausibleItem(value: unknown): value is Item {
 }
 
 /**
- * Repairs the daily-goal fields of an otherwise-plausible item. Backlogs
- * saved before daily goals existed carry neither field, so a missing log
- * becomes an empty one here rather than an undefined-is-not-iterable crash
- * later; a malformed goal or log entry is dropped on its own instead of
- * taking the whole item down with it.
+ * Repairs the daily-goal fields of an otherwise-plausible item and drops
+ * prototype-polluting keys.
+ *
+ * Backlogs saved before daily goals existed carry neither field, so a
+ * missing log becomes an empty one here rather than an
+ * undefined-is-not-iterable crash later; a malformed goal or log entry is
+ * dropped on its own instead of taking the whole item down with it.
  */
 function normalizeItem(item: Item): Item {
   const raw = item as unknown as Record<string, unknown>
@@ -55,8 +92,16 @@ function normalizeItem(item: Item): Item {
   const { dailyGoal: storedGoal, ...withoutGoal } = item
   void storedGoal
 
+  const safe = { ...withoutGoal } as Record<string, unknown>
+  for (const key of POLLUTING_KEYS) {
+    if (Object.hasOwn(safe, key)) {
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+      delete safe[key]
+    }
+  }
+
   return {
-    ...withoutGoal,
+    ...(safe as unknown as Omit<Item, 'dailyGoal'>),
     dailyProgress: Array.isArray(rawProgress)
       ? rawProgress.filter(isPlausibleProgressEntry)
       : [],
@@ -72,6 +117,8 @@ export function createItemEnvelope(items: readonly Item[]): ItemEnvelope {
 export interface ParsedItemEnvelope {
   readonly items: Item[]
   readonly warning: string | null
+  /** How many entries were rejected — safe to log, unlike the entries themselves. */
+  readonly droppedCount: number
   /**
    * True once raw JSON parsed and had the { version, items[] } shape, even
    * if individual items inside were dropped or the list is empty. False
@@ -82,22 +129,37 @@ export interface ParsedItemEnvelope {
   readonly envelopeValid: boolean
 }
 
+function rejected(warning: string): ParsedItemEnvelope {
+  return { items: [], warning, droppedCount: 0, envelopeValid: false }
+}
+
 /** Parses raw JSON into a validated item list, never throwing — corruption is reported via `warning`. */
 export function parseItemEnvelope(raw: string): ParsedItemEnvelope {
+  // Measured before parsing: rejecting a hostile payload is only useful
+  // if it happens before the expensive step, not after.
+  if (raw.length > MAX_ENVELOPE_BYTES) {
+    return rejected('File is too large (limit 5 MB)')
+  }
+
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
   } catch {
-    return { items: [], warning: 'Invalid JSON', envelopeValid: false }
+    return rejected('Invalid JSON')
   }
 
   if (!isEnvelopeShape(parsed)) {
-    return { items: [], warning: 'Unexpected data shape', envelopeValid: false }
+    return rejected('Unexpected data shape')
+  }
+
+  if (parsed.items.length > MAX_ENVELOPE_ITEMS) {
+    return rejected('Too many items (limit 10,000)')
   }
 
   const validItems = parsed.items.filter(isPlausibleItem).map(normalizeItem)
+  const droppedCount = parsed.items.length - validItems.length
   const warning =
-    validItems.length !== parsed.items.length ? 'Dropped malformed item(s)' : null
+    droppedCount > 0 ? `Dropped ${droppedCount.toString()} malformed item(s)` : null
 
-  return { items: validItems, warning, envelopeValid: true }
+  return { items: validItems, warning, droppedCount, envelopeValid: true }
 }

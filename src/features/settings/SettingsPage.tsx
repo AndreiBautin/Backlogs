@@ -1,5 +1,6 @@
 import { useRef, type ChangeEvent } from 'react'
 
+import { useAppConfig } from '@/app/config-context'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
@@ -13,6 +14,7 @@ import { CATEGORY_REGISTRY } from '@/domain/categories/category-registry'
 import { SORT_KEY_LABELS, SORT_KEYS } from '@/domain/sorting/sort-key'
 import { STATUS_LABELS, STATUSES } from '@/domain/status/status'
 import { THEME_LABELS, THEMES } from '@/domain/theme/theme'
+import { useResetDemoDataMutation } from '@/features/demo/hooks/use-reset-demo-data'
 import {
   useExportItemsMutation,
   useImportItemsMutation,
@@ -26,10 +28,12 @@ function exportFilename(now: Date): string {
 }
 
 export function SettingsPage() {
+  const { isDemo, build } = useAppConfig()
   const { data: settings, isLoading } = useSettingsQuery()
   const updateSettings = useUpdateSettingsMutation()
   const exportItems = useExportItemsMutation()
   const importItems = useImportItemsMutation()
+  const resetDemoData = useResetDemoDataMutation()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   if (isLoading || !settings) {
@@ -63,6 +67,15 @@ export function SettingsPage() {
     }
     const text = await file.text()
     importItems.mutate(text)
+  }
+
+  function handleResetDemoData() {
+    if (
+      !window.confirm('Reset the demo backlog to its original sample data. Continue?')
+    ) {
+      return
+    }
+    resetDemoData.mutate()
   }
 
   return (
@@ -196,6 +209,46 @@ export function SettingsPage() {
             {importItems.data.warning ? ` — ${importItems.data.warning}` : ''}.
           </p>
         )}
+        {importItems.isError && (
+          <p className="text-destructive text-xs">
+            Import failed. The file could not be read.
+          </p>
+        )}
+      </section>
+
+      {isDemo && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-foreground text-sm font-semibold">Demo</h2>
+          <p className="text-muted-foreground text-xs">
+            Restores the sample backlog and discards anything you have changed in this
+            browser.
+          </p>
+          <div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleResetDemoData}
+              disabled={resetDemoData.isPending}
+            >
+              Reset demo data
+            </Button>
+          </div>
+          {resetDemoData.isSuccess && (
+            <p className="text-muted-foreground text-xs">
+              Reset to {resetDemoData.data.itemCount} sample items.
+            </p>
+          )}
+        </section>
+      )}
+
+      <section className="flex flex-col gap-1">
+        <h2 className="text-foreground text-sm font-semibold">About</h2>
+        <p className="text-muted-foreground text-xs">
+          Version {build.version} · build {build.commit}
+        </p>
+        <p className="text-muted-foreground text-xs">
+          Your backlog is stored only in this browser. Nothing is uploaded anywhere.
+        </p>
       </section>
     </div>
   )

@@ -10,13 +10,18 @@ describe('createItemEnvelope / parseItemEnvelope', () => {
 
     const result = parseItemEnvelope(JSON.stringify(createItemEnvelope(items)))
 
-    expect(result).toEqual({ items, warning: null, envelopeValid: true })
+    expect(result).toEqual({ items, warning: null, droppedCount: 0, envelopeValid: true })
   })
 
   it('round-trips an empty list', () => {
     const result = parseItemEnvelope(JSON.stringify(createItemEnvelope([])))
 
-    expect(result).toEqual({ items: [], warning: null, envelopeValid: true })
+    expect(result).toEqual({
+      items: [],
+      warning: null,
+      droppedCount: 0,
+      envelopeValid: true,
+    })
   })
 
   it('reports a warning instead of throwing on invalid JSON, and marks the envelope invalid', () => {

@@ -2,6 +2,7 @@ import { LayoutDashboard, Search, Settings as SettingsIcon, Target } from 'lucid
 import { NavLink, Outlet } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
+import { DemoBanner } from '@/features/demo/DemoBanner'
 import { ItemDetailDrawer } from '@/features/items/components/ItemDetailDrawer'
 import { QuickCaptureModal } from '@/features/items/components/QuickCaptureModal'
 import { useItemUiStore } from '@/features/items/store/use-item-ui-store'
@@ -57,7 +58,8 @@ export function AppShell() {
         </ul>
       </nav>
 
-      <main className="min-w-0 flex-1">
+      <main className="flex min-w-0 flex-1 flex-col">
+        <DemoBanner />
         <Outlet />
       </main>
 
