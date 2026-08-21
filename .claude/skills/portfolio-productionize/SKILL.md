@@ -1,6 +1,6 @@
 ---
 name: portfolio-productionize
-description: Take an existing personal application from "a private app I built for myself" to "a small production application I can show an employer and explain in an interview" — assess, harden, seed safe demo data, add CI/CD, deploy to genuinely free no-credit-card hosting, verify against the live URL, and write the docs and interview guide. Use when the user asks to productionize, ship, deploy, publish, or portfolio-ify an existing app, or to make a personal project presentable to employers. Technology-agnostic; adapts to whatever stack the repository actually uses.
+description: Take an existing personal application from "a private app I built for myself" to "a small production application I can show an employer and explain in an interview" — assess, harden, seed safe demo data, add CI/CD, deploy to genuinely free no-credit-card hosting, verify against the live URL, write the docs and interview guide, and leave behind guardrails (enforced architecture rules, gated deploys, a pre-push hook) so future changes stay at the same bar. Use when the user asks to productionize, ship, deploy, publish, or portfolio-ify an existing app, or to make a personal project presentable to employers. Technology-agnostic; adapts to whatever stack the repository actually uses.
 ---
 
 # Portfolio productionization
@@ -325,7 +325,123 @@ rather than as a gap.
 
 ---
 
-## Phase 8 — Observability
+## Phase 8 — Make the bar self-enforcing
+
+Everything so far is a **one-time** improvement. Without this phase it
+decays: the next feature gets written without the layer rule, the demo
+fixture stops covering what the UI shows, a red commit deploys anyway, and
+in six months the repo is a productionized snapshot wrapped around
+un-productionized code.
+
+The goal is that **the pipeline notices, not the person.** Convert each
+convention into something a machine checks.
+
+### Encode the architecture as lint rules, not prose
+
+Whatever the stack's equivalent is — ESLint `no-restricted-imports` zones,
+`import-linter` contracts in Python, ArchUnit in Java/C#, `depguard` in Go
+— take the dependency rules you wrote in `ARCHITECTURE.md` and make them
+fail the build. Give each rule a **message that explains the reasoning**,
+not just "forbidden": the person hitting it is usually a future you who
+has forgotten why.
+
+Also worth enforcing mechanically, if they apply:
+
+- No direct logging calls outside the logger (so the level filter and the
+  no-user-content rule cannot be bypassed).
+- No direct storage/database access outside the persistence layer.
+- No direct environment reads outside the config layer.
+
+**Scope these to production code.** A test importing a fake repository is
+the intended design, not a violation — the rule constrains what ships.
+
+**Then prove each rule fires.** Write the violation, run the linter,
+confirm it is rejected, delete it. A guard nobody has seen fail is a
+comment.
+
+### Guard demo/local parity
+
+This is the failure mode unique to having a demo: a feature works
+perfectly against real data and renders an empty box on the deployed site,
+because the fixture has nothing that exercises it. The person who notices
+is the employer.
+
+Write a test that **renders every page against the demo fixture and fails
+on an empty state**, and assert the fixture's obligations as _properties_
+("every headline stat is non-zero", "every section is populated", "the
+filters have more than one option") rather than as a list of fixture
+titles — so editing the fixture stays free but hollowing it out does not.
+
+### Gate the deploy on verification
+
+If the deploy can publish a commit that failed CI, the pipeline is
+decorative. Either chain the workflows or — simpler and easier to read —
+run the same one-command verification as a job the build depends on.
+Duplicated CI minutes are cheap; a deploy pipeline that reads top to
+bottom is not.
+
+### Gate the push locally
+
+A pre-push hook running the same verification catches the failure before
+the commit ever reaches the remote. Two details that matter:
+
+- **Version the hook** (`.githooks/` plus `core.hooksPath`), and wire it
+  up from the install step, so a fresh clone gets it without a setup
+  ritual. A hook that lives only in one person's `.git/` is not a policy.
+- **Leave the bypass documented** (`--no-verify`). A gate with no escape
+  hatch gets disabled entirely the first time it is wrong.
+
+Prove it: commit a deliberate violation, attempt the push, confirm the
+block, then discard it. **Discard with care** — if you staged the probe
+alongside real work, resetting will take the real work with it. Commit the
+probe on its own, or recover from the reflog.
+
+### Keep dependencies from rotting
+
+The audit gate you added in Phase 2 becomes a permanent red light once
+dependencies go stale. Configure the platform's updater (Dependabot,
+Renovate) to group routine bumps into one periodic PR, keep majors and
+security fixes separate, and include the CI action/image versions — those
+go stale too. Every such PR is proved by the pipeline before merge.
+
+Note the gap to watch: a PR only exercises the workflows that run **on**
+pull requests. Actions used solely by the deploy workflow are untested
+until the merge lands, so watch the first deploy after one.
+
+### Protect the branch — with the solo-maintainer caveats
+
+Worth doing on a public repo, but two things are widely misunderstood:
+
+- **A public repo does not mean strangers can push.** Only collaborators
+  can. Branch protection mostly protects the maintainer from themselves.
+- **Nobody can approve their own pull request.** Requiring one approving
+  review on a single-maintainer repo deadlocks every PR the maintainer
+  opens. Do not set it, however much "require approval" sounds right —
+  say why instead.
+
+A configuration that protects without deadlocking:
+
+- Require the **CI** status checks — and _only_ those. Requiring a deploy
+  job deadlocks every PR, because deploy workflows do not run on PRs.
+- **No required reviews** (see above).
+- **Admins not enforced**, so the maintainer keeps a direct-push escape
+  hatch; the local hook still guards it.
+- **Force-push and deletion blocked** — the genuine protection.
+
+### Write the conventions down for whoever comes next
+
+Finally, the things a machine cannot check: where a new feature's code
+goes, why a particular constant must never be renamed, which invariants
+are load-bearing. Put them in the agent-conventions file the tooling reads
+automatically (`CLAUDE.md` at the repo root for Claude Code) so they load
+into every future session rather than being rediscovered — or not.
+
+Keep it about **decisions and traps**, not a restatement of the file tree.
+Link out to the real docs for depth.
+
+---
+
+## Phase 9 — Observability
 
 Proportionate. A portfolio app does not need a metrics pipeline.
 
@@ -343,7 +459,7 @@ information the app does not need.
 
 ---
 
-## Phase 9 — README
+## Phase 10 — README
 
 The README is the first thing an employer reads. It has about fifteen
 seconds.
@@ -362,7 +478,7 @@ seconds.
 
 ---
 
-## Phase 10 — Interview guide
+## Phase 11 — Interview guide
 
 **`docs/INTERVIEW_GUIDE.md`** — the highest-value document, because it is
 the one the user actually uses.
@@ -392,7 +508,7 @@ an interview.
 
 ---
 
-## Phase 11 — Final verification
+## Phase 12 — Final verification
 
 Verify, do not assume. Then report exactly what you verified and how.
 
@@ -412,6 +528,10 @@ Verify, do not assume. Then report exactly what you verified and how.
 - [ ] Browser console clean on the live site — a stray error reads as sloppy
 - [ ] README links resolve
 - [ ] Docs match the implementation
+- [ ] **Each new enforcement rule was proved to fire** by writing a violation
+- [ ] The pre-push hook actually blocks a bad push
+- [ ] The deploy refuses to publish a failing commit
+- [ ] Branch protection does not deadlock the maintainer
 
 **Anything unverified must be named as unverified in the final report.**
 
