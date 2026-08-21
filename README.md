@@ -167,6 +167,30 @@ Press **`N`** anywhere to quick-capture a new item.
 | `pnpm audit`                     | Dependency vulnerabilities at the `high` threshold |
 | **`pnpm verify`**                | **Everything CI runs, in one command**             |
 
+### Quality gates
+
+`pnpm install` wires up a **pre-push hook** that runs `pnpm verify` and
+refuses the push if anything fails (`git push --no-verify` to bypass). The
+deploy runs the same command before it publishes, so nothing reaches the
+live demo that hasn't passed.
+
+Three rules that are usually left to convention are enforced by lint here,
+each with a message explaining the reasoning:
+
+- **The layer boundaries.** `domain/` cannot import React or any other
+  layer; `application/` cannot import `infrastructure/`.
+- **No `console.*`** outside the structured logger, which is built to
+  carry event names and scalars rather than anything a user typed.
+- **No `localStorage`** outside the storage adapters, so every key keeps
+  coming from `config/storage-keys.ts` and the demo and personal
+  namespaces cannot collide.
+
+And `src/features/demo/demo-parity.test.tsx` fails if any page renders its
+empty state against the demo fixture — the specific way a feature can work
+locally and still look broken to someone clicking the live link.
+
+Conventions for extending the app are in [CLAUDE.md](CLAUDE.md).
+
 ### Configuration
 
 Copy [`.env.example`](.env.example) to `.env.local` to override anything.
