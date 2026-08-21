@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  # Lets the security job be re-run on demand after an advisory lands,
+  # without needing a code change to trigger it.
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # --frozen-lockfile makes CI fail on a lockfile that drifted from
+      # package.json, rather than quietly resolving something different
+      # from what runs locally.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Test
+        run: pnpm test:run
+
+      # Builds both configurations. The demo build is what actually gets
+      # deployed, so a failure that only appears under `--mode demo` has to
+      # surface here rather than at deploy time.
+      - name: Build (personal)
+        run: pnpm build
+
+      - name: Build (demo)
+        run: pnpm build:demo
+
+  security:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Gated at `high` on purpose. A portfolio app blocked by a moderate
+      # advisory in a transitive build-time dependency teaches nothing; a
+      # high or critical one is worth stopping for.
+      - name: Audit dependencies
+        run: pnpm audit --audit-level high
+
+      # Catches a credential committed by accident. This app has never had
+      # one, and the check is here to keep it that way.
+      - name: Scan the full history for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
