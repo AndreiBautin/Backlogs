@@ -15,5 +15,7 @@
 *.woff2  binary
 pnpm-lock.yaml linguist-generated=true
 
-# start.bat is run by cmd.exe on Windows, which is happiest with CRLF.
-start.bat text eol=crlf
+# start-app.bat is run by cmd.exe on Windows, which is happiest with CRLF:
+# an LF-only batch file breaks `goto`, labels and line continuations in
+# intermittent, hard-to-read ways, and this one uses all three.
+start-app.bat text eol=crlf

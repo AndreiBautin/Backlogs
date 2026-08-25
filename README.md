@@ -186,9 +186,12 @@ pnpm dev            # personal — your own backlog
 pnpm dev:demo       # demo — seeded with the same 38 items the live site uses
 ```
 
-**Windows:** double-click [`start.bat`](start.bat) — it installs
-dependencies on first run, starts the dev server in its own window, and
-opens your browser.
+**Windows:** double-click [`start-app.bat`](start-app.bat) — it installs
+dependencies on first run, refuses to start if something is already
+listening on 5173, waits for the server to answer rather than guessing at
+a delay, and then opens your browser. (It is `start-app.bat` and not
+`start.bat` because `cmd` matches built-in command names up to the first
+dot, so typing the latter runs `START` and opens an empty console.)
 
 Press **`N`** anywhere to quick-capture a new item.
 
