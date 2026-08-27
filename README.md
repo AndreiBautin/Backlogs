@@ -1,6 +1,6 @@
 # Backlogs
 
-> **Archived — absorbed into [Lift](https://github.com/AndreiBautin/Lift).**
+> **Archived — absorbed into [LifeOS](https://github.com/AndreiBautin/LifeOS).**
 >
 > Everything here now lives in the hub's **Backlog** area: the daily goals,
 > the progress log, the category registry and the import format this app
@@ -8,7 +8,7 @@
 > `lastUpdated` stamp, which it translates on the way in — so nothing
 > saved here is stranded.
 >
-> Live at https://andreibautin.github.io/Lift/. This repository is kept for its history and is no
+> Live at https://andreibautin.github.io/LifeOS/. This repository is kept for its history and is no
 > longer developed.
 
 [![CI](https://github.com/AndreiBautin/Backlogs/actions/workflows/ci.yml/badge.svg)](https://github.com/AndreiBautin/Backlogs/actions/workflows/ci.yml)
